@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>exAO Web Tracker — Balle verte & rose</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>exAO Web Tracker — suivi couleur (vert / rose)</h1>
+  </header>
+
+  <main>
+    <section id="cam">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas" width="640" height="480"></canvas>
+      <div class="controls">
+        <button id="startBtn">Démarrer</button>
+        <button id="stopBtn" disabled>Arrêter</button>
+        <button id="captureBtn">Enregistrer données (CSV)</button>
+      </div>
+      <div class="settings">
+        <label>Angle α (deg): <input id="angleInput" type="number" value="10" step="0.1" min="0" max="90"/></label>
+        <label>Distance d'étalonnage (m): <input id="scaleMeters" type="number" value="0.5" step="0.01"/></label>
+        <button id="calibrateBtn">Étalonner (cliquer 2 points sur la vidéo)</button>
+        <div>Fréquence cible d'échantillonnage: <input id="targetMs" type="number" value="10" step="1"/> ms</div>
+      </div>
+    </section>
+
+    <section id="results">
+      <h2>Données & Graphiques</h2>
+      <div id="info">
+        <p>Échantillons: <span id="nSamples">0</span></p>
+        <p>Estimation a (m/s²): <span id="aEstimated">—</span></p>
+        <p>Théorique a = 9.8·sin(α): <span id="aTheory">—</span></p>
+      </div>
+
+      <canvas id="posChart"></canvas>
+      <canvas id="velChart"></canvas>
+
+      <h3>Tableau (extrait)</h3>
+      <table id="dataTable">
+        <thead><tr><th>t (s)</th><th>x_v (m)</th><th>y_v (m)</th><th>x_p (m)</th><th>y_p (m)</th><th>v_v (m/s)</th><th>v_p (m/s)</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <footer>
+    <small>Basé sur l'exemple d'exAO fourni. (PDF)</small>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
