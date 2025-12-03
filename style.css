@@ -1,10 +1,11 @@
-body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin: 12px; color:#222 }
-header h1 { margin: 0 0 12px 0; font-size:1.3rem }
-#cam { display:flex; gap:12px; align-items:flex-start }
-video, canvas { border:1px solid #ccc; width: 640px; height: 480px; background:#000 }
-.controls, .settings { margin-top:8px }
-.settings label { display:block; margin:6px 0 }
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:12px; color:#222 }
+header h1 { margin:0 0 10px }
+.camRow { display:flex; gap:12px; align-items:flex-start }
+video, canvas { border:1px solid #ccc; width:640px; height:480px; background:#000 }
+.controls { margin-top:8px }
+.meta { margin-top:8px }
 #results { margin-top:18px }
 canvas#posChart, canvas#velChart { max-width:900px; height:300px; margin-bottom:12px }
-table { border-collapse: collapse; width: 900px; margin-top:8px }
-th, td { border:1px solid #ddd; padding:6px; font-size:0.9rem; text-align:center }
+table { border-collapse:collapse; width:900px }
+th, td { border:1px solid #ddd; padding:6px; text-align:center }
+.export { margin-top:8px }
