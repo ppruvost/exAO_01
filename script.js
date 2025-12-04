@@ -60,20 +60,22 @@ function detectRailAngle() {
         return null;
     }
 
-    // Convertir l'image en format OpenCV
     const src = cv.imread(previewCanvas);
     const gray = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-    // Appliquer un filtre de Canny pour détecter les contours
-    const edges = new cv.Mat();
-    cv.Canny(gray, edges, 50, 150, 3);
+    // Appliquer un flou pour réduire le bruit
+    const blurred = new cv.Mat();
+    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0);
 
-    // Détecter les lignes avec la transformation de Hough
+    // Détecter les contours avec Canny
+    const edges = new cv.Mat();
+    cv.Canny(blurred, edges, 50, 150, 3);
+
+    // Détecter les lignes avec HoughLinesP
     const lines = new cv.Mat();
     cv.HoughLinesP(edges, lines, 1, Math.PI / 180, 50, 50, 10);
 
-    // Trouver la ligne principale et calculer son angle
     let maxLength = 0;
     let mainLineAngle = 0;
 
@@ -81,29 +83,24 @@ function detectRailAngle() {
         const startPoint = new cv.Point(lines.data32S[i * 4], lines.data32S[i * 4 + 1]);
         const endPoint = new cv.Point(lines.data32S[i * 4 + 2], lines.data32S[i * 4 + 3]);
 
-        // Calculer la longueur de la ligne
         const dx = endPoint.x - startPoint.x;
         const dy = endPoint.y - startPoint.y;
         const length = Math.sqrt(dx * dx + dy * dy);
 
-        // Si cette ligne est plus longue que la ligne principale actuelle, la prendre comme nouvelle ligne principale
         if (length > maxLength) {
             maxLength = length;
             mainLineAngle = Math.atan2(dy, dx) * 180 / Math.PI;
         }
     }
 
-    // Convertir l'angle en une valeur positive et au 1/10 de degré près
-    mainLineAngle = Math.abs(mainLineAngle);
-    mainLineAngle = Math.round(mainLineAngle * 10) / 10;
-
     // Libérer les matrices OpenCV
     src.delete();
     gray.delete();
+    blurred.delete();
     edges.delete();
     lines.delete();
 
-    return mainLineAngle;
+    return maxLength > 0 ? Math.round(Math.abs(mainLineAngle) * 10) / 10 : null;
 }
 
 /* ------------------------- Camera preview + overlay ------------------------- */
@@ -225,6 +222,8 @@ processBtn.addEventListener("click", async () => {
                 pxToMeter = estimatePxToMeter();
                 if (pxToMeter) {
                     pxToMeterDisplay.textContent = `Échelle : ${pxToMeter.toFixed(6)} m/px`;
+                } else {
+                    console.error("La calibration de l'échelle a échoué.");
                 }
             }
 
@@ -232,6 +231,30 @@ processBtn.addEventListener("click", async () => {
             let relT = null;
             if (t0_detect === null) t0_detect = absT;
             relT = absT - t0_detect;
+
+            // Simuler des données pour le test
+            const x_px = 100 + Math.random() * 10; // Exemple de données simulées
+            const y_px = 100 + Math.random() * 10; // Exemple de données simulées
+            const x_m = pxToMeter ? x_px * pxToMeter : NaN;
+            const y_m = pxToMeter ? y_px * pxToMeter : NaN;
+
+            samplesRaw.push({ t: relT, x_px, y_px, x_m, y_m });
+
+            if (pxToMeter && Number.isFinite(x_m) && Number.isFinite(y_m)) {
+                const z = [[x_m], [y_m]];
+                if (!initialized) {
+                    kf.setFromMeasurement(z);
+                    initialized = true;
+                    prevT = relT;
+                } else {
+                    const dt = Math.max(1e-6, relT - prevT);
+                    kf.predict(dt);
+                    kf.update(z);
+                    prevT = relT;
+                }
+                const st = kf.getState();
+                samplesFilt.push({ t: relT, x: st.x, y: st.y, vx: st.vx, vy: st.vy });
+            }
 
             if (vid.currentTime + 0.0001 < vid.duration) {
                 vid.currentTime = Math.min(vid.duration, vid.currentTime + stepSec);
@@ -265,7 +288,6 @@ function finalize() {
         return;
     }
 
-    // Calcul de l'accélération estimée
     const T = samplesFilt.map(s => s.t);
     const V = samplesFilt.map(s => Math.hypot(s.vx, s.vy));
     let num = 0, den = 0;
@@ -277,26 +299,21 @@ function finalize() {
     }
     const aEst = den ? num / den : NaN;
 
-    // Calcul de l'accélération théorique
     const alphaDeg = Number(angleDisplay.textContent) || 0;
     const aTheory = 9.8 * Math.sin(alphaDeg * Math.PI / 180);
 
-    // Mise à jour des éléments HTML
     aEstimatedSpan.textContent = Number.isFinite(aEst) ? aEst.toFixed(4) : "—";
     aTheorySpan.textContent = aTheory.toFixed(4);
     regEquationP.textContent = Number.isFinite(aEst) ? `v = ${aEst.toFixed(4)} · t` : "Équation : —";
 
-    // Création des graphiques
     buildCharts(samplesFilt, aEst);
 
-    // Affichage des graphiques MRU ou MRUV selon l'angle
     if (alphaDeg === 0) {
         buildDoc2_MRU(samplesFilt);
     } else {
         buildDoc3_MRUV(samplesFilt);
     }
 
-    // Activation du bouton d'export CSV
     exportCSVBtn.disabled = false;
 }
 
