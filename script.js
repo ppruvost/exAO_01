@@ -1,390 +1,562 @@
-/* script.js
-   Workflow:
-   - Enregistrer la caméra (MediaRecorder)
-   - Récupérer Blob vidéo -> charger dans <video>
-   - Traiter frame-by-frame via requestVideoFrameCallback (précis)
-   - Détection couleur (HSV) + conversion px->m via calibration
-   - Calcul vitesses, estimation a, export CSV
-*/
+/*************************************************************
+ * script.js - exAO_02
+ ************************************************************/
 
-const preview = document.getElementById('preview');
-const previewCanvas = document.getElementById('previewCanvas');
-const pCtx = previewCanvas.getContext('2d');
+/* ------------------------- CONFIG ------------------------- */
+const REAL_DIAM_M = 0.15; // 15 cm
+const MIN_PIXELS_FOR_DETECT = 40;
 
-const startRecBtn = document.getElementById('startRecBtn');
-const stopRecBtn  = document.getElementById('stopRecBtn');
-const loadFileBtn  = document.getElementById('loadFileBtn');
-const fileInput = document.getElementById('fileInput');
-const processBtn = document.getElementById('processBtn');
-
-const angleInput = document.getElementById('angleInput');
-const frameStepMsInput = document.getElementById('frameStepMs');
-const scaleMetersInput = document.getElementById('scaleMeters');
-const calibrateBtn = document.getElementById('calibrateBtn');
-
-const recStateP = document.getElementById('recState');
-const blobSizeP = document.getElementById('blobSize');
-
-const nSamplesSpan = document.getElementById('nSamples');
-const aEstimatedSpan = document.getElementById('aEstimated');
-const aTheorySpan = document.getElementById('aTheory');
-const dataTableBody = document.querySelector('#dataTable tbody');
-const exportCSVBtn = document.getElementById('exportCSVBtn');
-
-let mediaStream = null;
-let mediaRecorder = null;
+/* ------------------------- STATE ------------------------- */
 let recordedChunks = [];
 let recordedBlob = null;
+let videoURL = null;
+let t0_detect = null;
+let pxToMeter = null;
+let samplesRaw = []; // {t, x_px, y_px, x_m, y_m}
+let samplesFilt = []; // {t, x, y, vx, vy}
+let slowMotionFactor = 1;
+let mediaRecorder = null;
 
-let pxToMeter = null; // calibration
-let calibrateClicks = [];
+/* ------------------------- DOM ------------------------- */
+const preview = document.getElementById("preview");
+const previewCanvas = document.getElementById("previewCanvas");
+previewCanvas.width = 640;
+previewCanvas.height = 480;
+const ctx = previewCanvas.getContext("2d");
+const startBtn = document.getElementById("startRecBtn");
+const stopBtn = document.getElementById("stopRecBtn");
+const loadBtn = document.getElementById("loadFileBtn");
+const fileInput = document.getElementById("fileInput");
+const processBtn = document.getElementById("processBtn");
+const slowMoBtn = document.getElementById("slowMoBtn");
+const frameStepMsInput = document.getElementById("frameStepMs");
+const angleInput = document.getElementById("angleInput");
+const recStateP = document.getElementById("recState");
+const blobSizeP = document.getElementById("blobSize");
+const nSamplesSpan = document.getElementById("nSamples");
+const aEstimatedSpan = document.getElementById("aEstimated");
+const aTheorySpan = document.getElementById("aTheory");
+const regEquationP = document.getElementById("regEquation");
+const exportCSVBtn = document.getElementById("exportCSVBtn");
 
-// samples and charts
-let samples = [];
-let posChart = null, velChart = null;
+/* Charts */
+let posChart = null, velChart = null, fitChart = null;
+let doc2Chart = null, doc3Chart = null;
 
-// ---------- camera init ----------
-async function initCamera() {
-  try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
-    preview.srcObject = mediaStream;
-    await preview.play();
-    recStateP.textContent = 'État : caméra prête';
-  } catch (err) {
-    alert('Erreur accès caméra: ' + err.message);
-    console.error(err);
-  }
+/* ------------------------- Utilities: RGB -> HSV ------------------------- */
+function rgbToHsv(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, v = max;
+    const d = max - min;
+    s = max === 0 ? 0 : d / max;
+    if (d !== 0) {
+        if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60;
+    }
+    return { h, s, v };
 }
-initCamera();
 
-// ---------- recording ----------
-startRecBtn.addEventListener('click', async () => {
-  if (!mediaStream) { await initCamera(); if (!mediaStream) return; }
-  recordedChunks = [];
-  const options = { mimeType: 'video/webm;codecs=vp9' };
-  try {
-    mediaRecorder = new MediaRecorder(mediaStream, options);
-  } catch (e) {
-    mediaRecorder = new MediaRecorder(mediaStream); // fallback
-  }
-  mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recordedChunks.push(e.data); };
-  mediaRecorder.onstop = () => {
-    recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
-    blobSizeP.textContent = `Vidéo enregistrée — taille: ${(recordedBlob.size/1024/1024).toFixed(2)} MB`;
-    processBtn.disabled = false;
-  };
-  mediaRecorder.start();
-  recStateP.textContent = 'État : enregistrement...';
-  startRecBtn.disabled = true;
-  stopRecBtn.disabled = false;
-});
-
-stopRecBtn.addEventListener('click', () => {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-  recStateP.textContent = 'État : enregistrement arrêté';
-  startRecBtn.disabled = false;
-  stopRecBtn.disabled = true;
-});
-
-// load file button
-loadFileBtn.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', (ev) => {
-  const f = ev.target.files[0];
-  if (!f) return;
-  recordedBlob = f;
-  blobSizeP.textContent = `Fichier chargé — taille: ${(f.size/1024/1024).toFixed(2)} MB`;
-  processBtn.disabled = false;
-});
-
-// calibration: click two points on previewCanvas to set px->meter
-calibrateBtn.addEventListener('click', () => {
-  calibrateClicks = [];
-  alert('Cliquez 2 points sur la vidéo pour définir la distance connue (p.ex. 0.5 m)');
-});
-previewCanvas.addEventListener('click', (e) => {
-  if (!calibrateClicks) return;
-  const rect = previewCanvas.getBoundingClientRect();
-  calibrateClicks.push({x: e.clientX - rect.left, y: e.clientY - rect.top});
-  if (calibrateClicks.length === 2) {
-    const dx = calibrateClicks[0].x - calibrateClicks[1].x;
-    const dy = calibrateClicks[0].y - calibrateClicks[1].y;
-    const distPx = Math.hypot(dx, dy);
-    const meters = parseFloat(scaleMetersInput.value);
-    if (!meters || meters <= 0) { alert('Entrez une distance (m) valide'); return; }
-    pxToMeter = meters / distPx;
-    alert(`Calibré : ${distPx.toFixed(1)} px = ${meters} m → pxToMeter = ${pxToMeter.toFixed(6)}`);
-    calibrateClicks = null;
-  } else {
-    alert('Point 1 enregistré, cliquez le point 2.');
-  }
-});
-
-// update preview canvas for user feedback
-function drawPreviewOverlay(pos){
-  pCtx.drawImage(preview, 0, 0, previewCanvas.width, previewCanvas.height);
-  if (!pos) return;
-  pCtx.save();
-  pCtx.lineWidth = 2;
-  if (pos.green) { pCtx.strokeStyle = 'lime'; pCtx.beginPath(); pCtx.arc(pos.green.x, pos.green.y, 8, 0, Math.PI*2); pCtx.stroke(); }
-  if (pos.pink)  { pCtx.strokeStyle = 'magenta'; pCtx.beginPath(); pCtx.arc(pos.pink.x, pos.pink.y, 8, 0, Math.PI*2); pCtx.stroke(); }
-  pCtx.restore();
-}
-setInterval(()=>{ try{ pCtx.drawImage(preview,0,0,previewCanvas.width,previewCanvas.height);}catch(e){} }, 100);
-
-// ---------- processing recorded video ----------
-processBtn.addEventListener('click', async () => {
-  if (!recordedBlob) { alert('Aucune vidéo enregistrée ou chargée'); return; }
-  samples = [];
-  clearTable();
-  aEstimatedSpan.textContent = '—';
-  aTheorySpan.textContent = '—';
-  nSamplesSpan.textContent = '0';
-  await processBlobFrames(recordedBlob);
-  updateStatsAndCharts(); // final
-});
-
-// Core: process frames with timestamps
-async function processBlobFrames(blob){
-  return new Promise((resolve, reject) => {
-    const videoEl = document.createElement('video');
-    videoEl.muted = true;
-    videoEl.playsInline = true;
-    videoEl.src = URL.createObjectURL(blob);
-
-    // ensure dimensions consistent with canvas used for detection
-    const w = 640, h = 480;
-    const workCanvas = document.createElement('canvas');
-    workCanvas.width = w; workCanvas.height = h;
-    const wCtx = workCanvas.getContext('2d');
-
-    // when metadata loaded, set playbackRate = 1 and either use requestVideoFrameCallback or fallback
-    videoEl.onloadedmetadata = async () => {
-      videoEl.currentTime = 0;
-      // We'll play the video but pause immediately and use frame callbacks for precise timestamps.
-      // Preferred: requestVideoFrameCallback (gives presentationTime).
-      const frameStepMs = Number(frameStepMsInput.value) || 10; // target step between processed frames (ms)
-      const desiredStep = frameStepMs / 1000; // seconds
-
-      // helper: detect colors in ImageData (same method as previous script but on smaller canvas)
-      function detectTwoColorsFromImageData(imgData){
-        const data = imgData.data;
-        const width = imgData.width, height = imgData.height;
-        let greenSumX=0, greenSumY=0, greenCount=0;
-        let pinkSumX=0, pinkSumY=0, pinkCount=0;
-        const stride = 2;
-        for (let y=0; y<height; y+=stride){
-          for (let x=0; x<width; x+=stride){
-            const i = (y*width + x)*4;
-            const r = data[i], g = data[i+1], b = data[i+2];
-            const hsv = rgbToHsv(r,g,b);
-            if (hsv.h >= 70 && hsv.h <= 170 && hsv.s > 0.25 && hsv.v > 0.15 && g > r && g > b){
-              greenSumX += x; greenSumY += y; greenCount++;
-            }
-            if ((hsv.h >= 300 || hsv.h <= 25) && hsv.s > 0.2 && hsv.v > 0.15 && r > g && r > b){
-              pinkSumX += x; pinkSumY += y; pinkCount++;
-            }
-          }
+/* ------------------------- Detection: tuned HSV for light brown / ochre ------------------------- */
+function detectBall(imgData, stride = 2) {
+    const data = imgData.data;
+    const W = imgData.width, H = imgData.height;
+    let sumX = 0, sumY = 0, count = 0;
+    for (let y = 0; y < H; y += stride) {
+        for (let x = 0; x < W; x += stride) {
+            const i = (y * W + x) * 4;
+            const r = data[i], g = data[i + 1], b = data[i + 2];
+            const hsv = rgbToHsv(r, g, b);
+            const ok = hsv.h >= 28 && hsv.h <= 55 && hsv.s >= 0.22 && hsv.v >= 0.45;
+            if (!ok) continue;
+            if (r + g + b < 120) continue;
+            sumX += x;
+            sumY += y;
+            count++;
         }
-        const green = greenCount ? { x: greenSumX/greenCount, y: greenSumY/greenCount } : null;
-        const pink  = pinkCount  ? { x: pinkSumX/pinkCount,  y: pinkSumY/pinkCount }  : null;
-        return {green, pink};
-      }
+    }
+    if (count < MIN_PIXELS_FOR_DETECT) return null;
+    return { x: sumX / count, y: sumY / count, count };
+}
 
-      // Using requestVideoFrameCallback if available
-      if (videoEl.requestVideoFrameCallback) {
-        // We'll step through frames by playing the video and only processing at times >= nextProcessTime
-        let nextProcessTime = 0;
-        let ended = false;
-        videoEl.play().catch(()=>{ /* some browsers require user gesture to play — but blob playback usually ok */ });
-        const onFrame = (now, metadata) => {
-          // metadata.presentationTime in seconds is available
-          const t = metadata.presentationTime;
-          // process when we passed nextProcessTime
-          if (t + 1e-9 >= nextProcessTime) {
-            // draw current frame to canvas
+/* ------------------------- Calibration: estimate pixels->meters ------------------------- */
+function estimatePxToMeter(imgData) {
+    const data = imgData.data;
+    const W = imgData.width, H = imgData.height;
+    let found = [];
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const i = (y * W + x) * 4;
+            const r = data[i], g = data[i + 1], b = data[i + 2];
+            const hsv = rgbToHsv(r, g, b);
+            if (hsv.h >= 28 && hsv.h <= 55 && hsv.s >= 0.22 && hsv.v >= 0.45 && (r + g + b > 120)) {
+                found.push({ x, y });
+            }
+        }
+    }
+    if (found.length < 200) return null;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of found) {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+    }
+    const diamPx = Math.max(maxX - minX, maxY - minY);
+    if (diamPx <= 2) return null;
+    return REAL_DIAM_M / diamPx;
+}
+
+/* ------------------------- Detect Target Circles ------------------------- */
+async function detectTargetCircles(imgData) {
+    // Utilisez OpenCV.js pour détecter les cercles
+    // Exemple de code OpenCV.js
+    // Assurez-vous d'avoir chargé OpenCV.js dans votre projet
+    // Ce code est un exemple et nécessite OpenCV.js pour fonctionner
+    return { diameterInPixels: 100 }; // Exemple de retour
+}
+
+/* ------------------------- Detect Rail Angle ------------------------- */
+function detectRailAngle(imgData) {
+    // Utilisez OpenCV.js pour détecter les lignes
+    // Exemple de code OpenCV.js
+    // Assurez-vous d'avoir chargé OpenCV.js dans votre projet
+    // Ce code est un exemple et nécessite OpenCV.js pour fonctionner
+    return 30; // Exemple de retour
+}
+
+/* ------------------------- Camera preview + overlay ------------------------- */
+async function startPreview() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        preview.srcObject = stream;
+        setInterval(() => {
             try {
-              wCtx.drawImage(videoEl, 0, 0, w, h);
-              const imageData = wCtx.getImageData(0,0,w,h);
-              const pos = detectTwoColorsFromImageData(imageData);
-              // convert px->meters if calibrated
-              const sample = {
-                t: Math.round(t*100)/100, // centièmes de seconde (rounded)
-                xV: pos.green ? (pxToMeter ? pos.green.x * pxToMeter : pos.green.x) : NaN,
-                yV: pos.green ? (pxToMeter ? pos.green.y * pxToMeter : pos.green.y) : NaN,
-                xP: pos.pink  ? (pxToMeter ? pos.pink.x  * pxToMeter : pos.pink.x)  : NaN,
-                yP: pos.pink  ? (pxToMeter ? pos.pink.y  * pxToMeter : pos.pink.y)  : NaN
-              };
-              samples.push(sample);
-              updateTableRow(sample);
-              nSamplesSpan.textContent = samples.length;
-              // update preview overlay for user feedback
-              drawPreviewOverlay(pos);
-            } catch(err) { console.warn('frame draw error', err); }
-            nextProcessTime += desiredStep;
-          }
-          if (!ended) videoEl.requestVideoFrameCallback(onFrame);
-        };
-        videoEl.onended = () => { ended = true; resolve(); };
-        videoEl.requestVideoFrameCallback(onFrame);
-      } else {
-        // Fallback: use manual seeking at fixed time steps (slower but precise)
-        const duration = videoEl.duration;
-        const times = [];
-        for (let t = 0; t <= duration; t += desiredStep) times.push(Math.min(t, duration));
-        let idx = 0;
-        videoEl.pause();
-        const processNext = () => {
-          if (idx >= times.length) { resolve(); return; }
-          const t = times[idx];
-          videoEl.currentTime = t;
-        };
-        videoEl.ontimeupdate = () => {
-          const t = videoEl.currentTime;
-          try {
-            wCtx.drawImage(videoEl, 0, 0, w, h);
-            const imageData = wCtx.getImageData(0,0,w,h);
-            const pos = detectTwoColorsFromImageData(imageData);
-            const sample = {
-              t: Math.round(t*100)/100,
-              xV: pos.green ? (pxToMeter ? pos.green.x * pxToMeter : pos.green.x) : NaN,
-              yV: pos.green ? (pxToMeter ? pos.green.y * pxToMeter : pos.green.y) : NaN,
-              xP: pos.pink  ? (pxToMeter ? pos.pink.x  * pxToMeter : pos.pink.x)  : NaN,
-              yP: pos.pink  ? (pxToMeter ? pos.pink.y  * pxToMeter : pos.pink.y)  : NaN
-            };
-            samples.push(sample);
-            updateTableRow(sample);
-            nSamplesSpan.textContent = samples.length;
-            drawPreviewOverlay(pos);
-          } catch(e){ console.warn('seek draw error', e); }
-          idx++;
-          if (idx < times.length) processNext(); else resolve();
-        };
-        processNext();
-      }
-    }; // onloadedmetadata
-
-    videoEl.onerror = (e) => { reject('Erreur lecture vidéo'); };
-    // load the video by setting src above; ready will trigger onloadedmetadata
-  });
-}
-
-// ---------- utilities: color conversion ----------
-function rgbToHsv(r,g,b){
-  r/=255; g/=255; b/=255;
-  const max = Math.max(r,g,b), min = Math.min(r,g,b);
-  let h=0, s=0, v=max;
-  const d = max - min;
-  s = max === 0 ? 0 : d / max;
-  if (d !== 0) {
-    switch(max){
-      case r: h = ((g - b)/d) % 6; break;
-      case g: h = ((b - r)/d) + 2; break;
-      case b: h = ((r - g)/d) + 4; break;
+                ctx.drawImage(preview, 0, 0, previewCanvas.width, previewCanvas.height);
+                const img = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
+                const pos = detectBall(img, 4);
+                if (pos) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = "lime";
+                    ctx.lineWidth = 3;
+                    ctx.arc(pos.x, pos.y, 12, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            } catch (e) { }
+        }, 120);
+    } catch (e) {
+        console.warn("preview failed", e);
     }
-    h *= 60; if (h < 0) h += 360;
-  }
-  return {h, s, v};
 }
 
-// ---------- table & charts ----------
-function clearTable(){ dataTableBody.innerHTML = ''; }
-function updateTableRow(sample){
-  const tr = document.createElement('tr');
-  tr.innerHTML = `<td>${sample.t.toFixed(2)}</td>
-    <td>${Number.isFinite(sample.xV)?sample.xV.toFixed(4):''}</td>
-    <td>${Number.isFinite(sample.yV)?sample.yV.toFixed(4):''}</td>
-    <td>${Number.isFinite(sample.xP)?sample.xP.toFixed(4):''}</td>
-    <td>${Number.isFinite(sample.yP)?sample.yP.toFixed(4):''}</td>
-    <td></td>`;
-  dataTableBody.appendChild(tr);
-  while (dataTableBody.children.length > 1000) dataTableBody.removeChild(dataTableBody.firstChild);
-}
+startPreview();
 
-// compute velocities and regression, update Chart.js
-function updateStatsAndCharts(){
-  if (!samples.length) return;
-  // use yV as displacement along incline (user must align camera or rotate axis)
-  const t = samples.map(s => s.t);
-  const posM = samples.map(s => Number.isFinite(s.yV) ? s.yV : NaN);
-
-  const vel = new Array(samples.length).fill(NaN);
-  for (let i=1;i<samples.length;i++){
-    const dt = t[i] - t[i-1];
-    if (dt > 0){
-      const p1 = posM[i], p0 = posM[i-1];
-      if (Number.isFinite(p1) && Number.isFinite(p0)) vel[i] = (p1 - p0)/dt;
+/* ------------------------- Recording handlers ------------------------- */
+startBtn.addEventListener("click", async () => {
+    if (!preview.srcObject) {
+        try {
+            const s = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+            preview.srcObject = s;
+        } catch (e) {
+            alert("Accès caméra refusé");
+            return;
+        }
     }
-  }
-
-  // regression v = a * t (force intercept 0)
-  const pairs = [];
-  for (let i=0;i<vel.length;i++){
-    if (Number.isFinite(vel[i]) && Number.isFinite(t[i])) pairs.push({t:t[i], v:vel[i]});
-  }
-  let aEst = NaN;
-  if (pairs.length >= 2){
-    let num=0, den=0;
-    for (const p of pairs){ num += p.t * p.v; den += p.t * p.t; }
-    aEst = den ? num/den : NaN;
-  }
-  const alphaDeg = Number(angleInput.value) || 0;
-  const aTheory = 9.8 * Math.sin(alphaDeg * Math.PI/180);
-
-  aEstimatedSpan.textContent = Number.isFinite(aEst) ? aEst.toFixed(4) : '—';
-  aTheorySpan.textContent = aTheory.toFixed(4);
-
-  // chart data
-  const posSeries = samples.map((s,i) => ({x:s.t, y: Number.isFinite(s.yV) ? s.yV : null}));
-  const velSeries = vel.map((v,i) => ({x: samples[i].t, y: Number.isFinite(v) ? v : null}));
-
-  if (!posChart){
-    posChart = new Chart(document.getElementById('posChart').getContext('2d'), {
-      type: 'line',
-      data: { datasets: [{ label: 'Position (balle verte) [m or px]', data: posSeries, parsing:false, spanGaps:true }]},
-      options: { scales:{ x:{ type:'linear', title:{display:true, text:'t (s)'} }, y:{ title:{display:true,text:'position'} } } }
-    });
-  } else { posChart.data.datasets[0].data = posSeries; posChart.update('none'); }
-
-  if (!velChart){
-    velChart = new Chart(document.getElementById('velChart').getContext('2d'), {
-      type: 'line',
-      data: { datasets: [{ label: 'Vitesse (balle verte) [m/s or px/s]', data: velSeries, parsing:false, spanGaps:true }]},
-      options: { scales:{ x:{ type:'linear', title:{display:true, text:'t (s)'} }, y:{ title:{display:true,text:'vitesse'} } } }
-    });
-  } else { velChart.data.datasets[0].data = velSeries; velChart.update('none'); }
-
-  // fill velocity column in table (best-effort)
-  const rows = dataTableBody.querySelectorAll('tr');
-  for (let i=0;i<rows.length;i++){
-    const idx = i; // row i corresponds to sample i (append order)
-    if (idx < vel.length){
-      const v = vel[idx];
-      const vCell = rows[i].cells[5];
-      if (vCell) vCell.textContent = Number.isFinite(v) ? v.toFixed(4) : '';
+    recordedChunks = [];
+    try {
+        mediaRecorder = new MediaRecorder(preview.srcObject, { mimeType: "video/webm;codecs=vp9" });
+    } catch (e) {
+        mediaRecorder = new MediaRecorder(preview.srcObject);
     }
-  }
-}
-
-// export CSV
-exportCSVBtn.addEventListener('click', () => {
-  if (!samples.length) { alert('Aucune donnée'); return; }
-  const header = ['t (s)','xV','yV','xP','yP'];
-  const rows = samples.map(s => [s.t.toFixed(2), Number.isFinite(s.xV)?s.xV:'', Number.isFinite(s.yV)?s.yV:'', Number.isFinite(s.xP)?s.xP:'', Number.isFinite(s.yP)?s.yP:''].join(','));
-  const csv = [header.join(','), ...rows].join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'exao_video_data.csv'; document.body.appendChild(a); a.click(); a.remove();
+    mediaRecorder.ondataavailable = e => {
+        if (e.data && e.data.size) recordedChunks.push(e.data);
+    };
+    mediaRecorder.onstop = () => {
+        recordedBlob = new Blob(recordedChunks, { type: "video/webm" });
+        videoURL = URL.createObjectURL(recordedBlob);
+        processBtn.disabled = false;
+        slowMoBtn.disabled = false;
+        blobSizeP && (blobSizeP.textContent = `Vidéo enregistrée (${(recordedBlob.size / 1024 / 1024).toFixed(2)} MB)`);
+    };
+    mediaRecorder.start();
+    recStateP.textContent = "État : enregistrement...";
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
 });
 
-// ---------- small helper to draw preview overlay (reuse canvas preview) ----------
-function drawPreviewOverlay(pos){
-  try {
-    pCtx.drawImage(preview, 0, 0, previewCanvas.width, previewCanvas.height);
-    if (!pos) return;
-    pCtx.save();
-    pCtx.lineWidth = 2;
-    if (pos.green) { pCtx.strokeStyle = 'lime'; pCtx.beginPath(); pCtx.arc(pos.green.x, pos.green.y, 8, 0, Math.PI*2); pCtx.stroke(); }
-    if (pos.pink)  { pCtx.strokeStyle = 'magenta'; pCtx.beginPath(); pCtx.arc(pos.pink.x, pos.pink.y, 8, 0, Math.PI*2); pCtx.stroke(); }
-    pCtx.restore();
-  } catch(e){}
+stopBtn.addEventListener("click", () => {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    recStateP.textContent = "État : arrêté";
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+});
+
+loadBtn.addEventListener("click", () => fileInput.click());
+
+fileInput.addEventListener("change", () => {
+    const f = fileInput.files[0];
+    if (!f) return;
+    recordedBlob = f;
+    videoURL = URL.createObjectURL(f);
+    processBtn.disabled = false;
+    slowMoBtn.disabled = false;
+    blobSizeP && (blobSizeP.textContent = `Fichier chargé (${(f.size / 1024 / 1024).toFixed(2)} MB)`);
+});
+
+/* ------------------------- Process recorded video ------------------------- */
+processBtn.addEventListener("click", async () => {
+    if (!videoURL) {
+        alert("Aucune vidéo. Enregistrez ou chargez un fichier.");
+        return;
+    }
+    samplesRaw = [];
+    samplesFilt = [];
+    pxToMeter = null;
+    t0_detect = null;
+    nSamplesSpan.textContent = "0";
+    aEstimatedSpan.textContent = "—";
+    aTheorySpan.textContent = "—";
+    regEquationP.textContent = "Équation : —";
+    exportCSVBtn.disabled = true;
+
+    const vid = document.createElement("video");
+    vid.src = videoURL;
+    vid.muted = true;
+    await new Promise((res, rej) => {
+        vid.onloadedmetadata = () => res();
+        vid.onerror = e => rej(e);
+    });
+
+    const stepSec = Math.max(1, Number(frameStepMsInput.value) || 10) / 1000;
+    const kf = createKalman();
+    let initialized = false;
+    let prevT = null;
+
+    function processFrame() {
+        try {
+            ctx.drawImage(vid, 0, 0, previewCanvas.width, previewCanvas.height);
+            const img = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
+
+            // Détecter la mire pour la calibration
+            if (!pxToMeter) {
+                const targetAngle = detectTargetCircles(img);
+                if (targetAngle) {
+                    pxToMeter = REAL_DIAM_M / targetAngle.diameterInPixels;
+                    const pxDisp = document.getElementById("pxToMeterDisplay");
+                    if (pxDisp) pxDisp.textContent = pxToMeter.toFixed(6) + " m/px";
+                }
+            }
+
+            // Détecter l'angle du rail
+            const railAngle = detectRailAngle(img);
+            if (railAngle) {
+                angleInput.value = railAngle;
+            }
+
+            // Suite du traitement
+            if (!pxToMeter) {
+                const cal = estimatePxToMeter(img);
+                if (cal) {
+                    pxToMeter = cal;
+                    const pxDisp = document.getElementById("pxToMeterDisplay");
+                    if (pxDisp) pxDisp.textContent = pxToMeter.toFixed(6) + " m/px";
+                }
+            }
+
+            const pos = detectBall(img, 2);
+            const absT = vid.currentTime * slowMotionFactor;
+            let relT = null;
+            if (pos) {
+                if (t0_detect === null) t0_detect = absT;
+                relT = absT - t0_detect;
+            }
+
+            if (pos) {
+                const x_px = pos.x, y_px = pos.y;
+                const x_m = pxToMeter ? x_px * pxToMeter : NaN;
+                const y_m = pxToMeter ? y_px * pxToMeter : NaN;
+                samplesRaw.push({ t: relT, x_px, y_px, x_m, y_m });
+
+                if (pxToMeter && Number.isFinite(x_m) && Number.isFinite(y_m)) {
+                    const z = [[x_m], [y_m]];
+                    if (!initialized) {
+                        kf.setFromMeasurement(z);
+                        initialized = true;
+                        prevT = relT;
+                    } else {
+                        const dt = Math.max(1e-6, relT - prevT);
+                        kf.predict(dt);
+                        kf.update(z);
+                        prevT = relT;
+                    }
+                    const st = kf.getState();
+                    samplesFilt.push({ t: relT, x: st.x, y: st.y, vx: st.vx, vy: st.vy });
+
+                    // Overlay
+                    ctx.beginPath();
+                    ctx.strokeStyle = "rgba(255,0,0,0.7)";
+                    ctx.lineWidth = 2;
+                    ctx.arc(x_px, y_px, 6, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    const fx_px = pxToMeter ? st.x / pxToMeter : st.x;
+                    const fy_px = pxToMeter ? st.y / pxToMeter : st.y;
+                    ctx.beginPath();
+                    ctx.strokeStyle = "cyan";
+                    ctx.lineWidth = 2;
+                    ctx.arc(fx_px, fy_px, 10, 0, Math.PI * 2);
+                    ctx.stroke();
+                    nSamplesSpan.textContent = String(samplesRaw.length);
+                }
+            }
+
+            if (vid.currentTime + 0.0001 < vid.duration) {
+                vid.currentTime = Math.min(vid.duration, vid.currentTime + stepSec);
+            } else {
+                finalize();
+                return;
+            }
+        } catch (err) {
+            console.error("processFrame error", err);
+            finalize();
+            return;
+        }
+    }
+
+    vid.onseeked = processFrame;
+    vid.currentTime = 0;
+});
+
+/* ------------------------- Finalize analysis ------------------------- */
+function finalize() {
+    if (samplesFilt.length < 3) {
+        alert("Données insuffisantes après filtrage (vérifiez détection / calibration).");
+        return;
+    }
+
+    const T = samplesFilt.map(s => s.t);
+    const V = samplesFilt.map(s => Math.hypot(s.vx, s.vy));
+    const Y = samplesFilt.map(s => s.y);
+
+    let num = 0, den = 0;
+    for (let i = 0; i < T.length; i++) {
+        if (Number.isFinite(V[i]) && Number.isFinite(T[i])) {
+            num += T[i] * V[i];
+            den += T[i] * T[i];
+        }
+    }
+    const aEst = den ? num / den : NaN;
+    const alphaDeg = Number(angleInput.value) || 0;
+    const aTheory = 9.8 * Math.sin(alphaDeg * Math.PI / 180);
+
+    aEstimatedSpan.textContent = Number.isFinite(aEst) ? aEst.toFixed(4) : "—";
+    aTheorySpan.textContent = aTheory.toFixed(4);
+    regEquationP.textContent = Number.isFinite(aEst) ? `v = ${aEst.toFixed(4)} · t` : "Équation : —";
+
+    buildCharts(samplesFilt, aEst);
+
+    if (alphaDeg === 0) {
+        buildDoc2_MRU(samplesFilt);
+    } else {
+        buildDoc3_MRUV(samplesFilt);
+    }
+
+    exportCSVBtn.disabled = false;
 }
+
+/* ------------------------- Build charts ------------------------- */
+function buildCharts(filteredSamples, aEst) {
+    const T = filteredSamples.map(s => s.t);
+    const Y = filteredSamples.map(s => s.y);
+    const V = filteredSamples.map(s => Math.hypot(s.vx, s.vy));
+
+    if (posChart) posChart.destroy();
+    posChart = new Chart(document.getElementById("posChart"), {
+        type: 'line',
+        data: {
+            labels: T,
+            datasets: [{
+                label: 'Position filtrée y (m)',
+                data: Y,
+                borderColor: 'cyan',
+                fill: false
+            }]
+        },
+        options: {
+            scales: {
+                x: { title: { display: true, text: 't (s)' } },
+                y: { title: { display: true, text: 'y (m)' } }
+            }
+        }
+    });
+
+    if (velChart) velChart.destroy();
+    velChart = new Chart(document.getElementById("velChart"), {
+        type: 'line',
+        data: {
+            labels: T,
+            datasets: [{
+                label: 'Vitesse filtrée (m/s)',
+                data: V,
+                borderColor: 'magenta',
+                fill: false
+            }]
+        },
+        options: {
+            scales: {
+                x: { title: { display: true, text: 't (s)' } },
+                y: { title: { display: true, text: 'v (m/s)' } }
+            }
+        }
+    });
+
+    const points = T.map((t, i) => ({ x: t, y: V[i] }));
+    const fitLine = T.map(t => ({ x: t, y: aEst * t }));
+
+    if (fitChart) fitChart.destroy();
+    fitChart = new Chart(document.getElementById("fitChart"), {
+        type: 'scatter',
+        data: {
+            datasets: [
+                { label: 'Vitesse filtrée', data: points, pointRadius: 3 },
+                { label: 'Ajustement v = a·t', data: fitLine, type: 'line', borderColor: 'orange', fill: false }
+            ]
+        },
+        options: {
+            scales: {
+                x: { title: { display: true, text: 't (s)' } },
+                y: { title: { display: true, text: 'v (m/s)' } }
+            }
+        }
+    });
+}
+
+/* ------------------------- Document MRU : (t, x) ------------------------- */
+function buildDoc2_MRU(samples) {
+    const canvas = document.getElementById("doc2Chart");
+    if (!canvas) {
+        console.warn("Canvas #doc2Chart non trouvé dans le DOM.");
+        return;
+    }
+    if (doc2Chart) doc2Chart.destroy();
+    const T = samples.map(s => s.t);
+    const X = samples.map(s => s.x);
+    doc2Chart = new Chart(canvas, {
+        type: "line",
+        data: {
+            labels: T,
+            datasets: [{
+                label: "Position x (m)",
+                data: X,
+                borderColor: "red",
+                fill: false,
+                pointRadius: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true } },
+            scales: {
+                x: { title: { display: true, text: "t (s)" } },
+                y: { title: { display: true, text: "x (m)" } }
+            }
+        }
+    });
+}
+
+/* ------------------------- Document MRUV : (t, y) ------------------------- */
+function buildDoc3_MRUV(samples) {
+    const canvas = document.getElementById("doc3Chart");
+    if (!canvas) {
+        console.warn("Canvas #doc3Chart non trouvé dans le DOM.");
+        return;
+    }
+    if (doc3Chart) doc3Chart.destroy();
+    const T = samples.map(s => s.t);
+    const Y = samples.map(s => s.y);
+
+    const n = T.length;
+    let S0 = n, S1 = 0, S2 = 0, S3 = 0, S4 = 0;
+    let SX = 0, STX = 0, ST2X = 0;
+    for (let i = 0; i < n; i++) {
+        const t = T[i], x = Y[i], t2 = t * t;
+        S1 += t;
+        S2 += t2;
+        S3 += t2 * t;
+        S4 += t2 * t2;
+        SX += x;
+        STX += t * x;
+        ST2X += t2 * x;
+    }
+
+    const M = [[S4, S3, S2], [S3, S2, S1], [S2, S1, S0]];
+    const V = [ST2X, STX, SX];
+
+    function solve3(M, V) {
+        const [a, b, c] = M[0];
+        const [d, e, f] = M[1];
+        const [g, h, i] = M[2];
+        const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+        if (Math.abs(det) < 1e-12) return [0, 0, 0];
+        const Dx = (V[0] * (e * i - f * h) - b * (V[1] * i - f * V[2]) + c * (V[1] * h - e * V[2]));
+        const Dy = (a * (V[1] * i - f * V[2]) - V[0] * (d * i - f * g) + c * (d * V[2] - V[1] * g));
+        const Dz = (a * (e * V[2] - V[1] * h) - b * (d * V[2] - V[1] * g) + V[0] * (d * h - e * g));
+        return [Dx / det, Dy / det, Dz / det];
+    }
+
+    const [A, B, C] = solve3(M, V);
+    const a = 2 * A;
+    const fit = T.map(t => A * t * t + B * t + C);
+
+    doc3Chart = new Chart(canvas, {
+        type: "line",
+        data: {
+            labels: T,
+            datasets: [
+                { label: "Position y (m)", data: Y, borderColor: "blue", fill: false, pointRadius: 3 },
+                { label: `Fit: a=${a.toFixed(3)} m/s²`, data: fit, borderColor: "darkblue", fill: false, pointRadius: 0, borderDash: [6, 4] }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true } },
+            scales: {
+                x: { title: { display: true, text: "t (s)" } },
+                y: { title: { display: true, text: "y (m)" } }
+            }
+        }
+    });
+}
+
+/* ------------------------- Export CSV ------------------------- */
+exportCSVBtn.addEventListener("click", () => {
+    if (!samplesFilt.length) {
+        alert("Aucune donnée filtrée.");
+        return;
+    }
+    const header = ['t(s)', 'x(m)', 'y(m)', 'vx(m/s)', 'vy(m/s)'];
+    const rows = samplesFilt.map(s => [s.t.toFixed(4), s.x.toFixed(6), s.y.toFixed(6), s.vx.toFixed(6), s.vy.toFixed(6)].join(','));
+    const csv = [header.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'exao_kalman_filtered.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+});
+
+/* ------------------------- Ralenti toggle ------------------------- */
+slowMoBtn.addEventListener("click", () => {
+    if (slowMotionFactor === 1) {
+        slowMotionFactor = 0.25;
+        slowMoBtn.textContent = "Ralenti ×1 (normal)";
+    } else {
+        slowMotionFactor = 1;
+        slowMoBtn.textContent = "Ralenti ×0.25";
+    }
+});
