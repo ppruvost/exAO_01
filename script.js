@@ -40,6 +40,13 @@ const regEquationP = document.getElementById("regEquation");
 const exportCSVBtn = document.getElementById("exportCSVBtn");
 const pxToMeterDisplay = document.getElementById("pxToMeterDisplay");
 
+/* ------------------------- Charts ------------------------- */
+let posChart = null;
+let velChart = null;
+let fitChart = null;
+let doc2Chart = null;
+let doc3Chart = null;
+
 /* ------------------------- Utilities: RGB -> HSV ------------------------- */
 function rgbToHsv(r, g, b) {
     r /= 255;
@@ -82,26 +89,10 @@ function detectBall(imgData, stride = 2) {
 
 /* ------------------------- Calibration: estimate pixels->meters using the mire ------------------------- */
 function estimatePxToMeter(imgData) {
-    // Utiliser OpenCV.js pour détecter le cercle de la mire
-    // Exemple simplifié : on suppose que le cercle est détecté et que son diamètre en pixels est connu
-    // En pratique, utilisez cv.HoughCircles() pour détecter le cercle
-    const diamPx = detectMireCircleDiameter(imgData); // Fonction à implémenter avec OpenCV.js
+    // Simule la détection du diamètre du cercle de la mire (à remplacer par OpenCV.js)
+    const diamPx = 200; // Exemple : diamètre en pixels
     if (!diamPx || diamPx <= 2) return null;
     return REAL_DIAM_M / diamPx;
-}
-
-// Fonction simulée pour détecter le diamètre du cercle de la mire (à remplacer par OpenCV.js)
-function detectMireCircleDiameter(imgData) {
-    // Exemple : retournez un diamètre en pixels pour la démo
-    // En pratique, utilisez OpenCV.js pour détecter le cercle
-    return 200; // Diamètre en pixels (exemple)
-}
-
-/* ------------------------- Detect Rail Angle ------------------------- */
-function detectRailAngle(imgData) {
-    // Utiliser OpenCV.js pour détecter les lignes du rail et calculer l'angle
-    // Exemple simplifié : retournez un angle en degrés
-    return 30; // Angle en degrés (exemple)
 }
 
 /* ------------------------- Camera preview + overlay ------------------------- */
@@ -188,6 +179,8 @@ processBtn.addEventListener("click", async () => {
         alert("Aucune vidéo. Enregistrez ou chargez un fichier.");
         return;
     }
+
+    // Réinitialisation des données
     samplesRaw = [];
     samplesFilt = [];
     pxToMeter = null;
@@ -222,12 +215,6 @@ processBtn.addEventListener("click", async () => {
                 if (pxToMeter) {
                     pxToMeterDisplay.textContent = `Échelle : ${pxToMeter.toFixed(6)} m/px`;
                 }
-            }
-
-            // Détection de l'angle du rail
-            const railAngle = detectRailAngle(img);
-            if (railAngle) {
-                angleInput.value = railAngle;
             }
 
             // Détection de la balle
@@ -302,10 +289,9 @@ function finalize() {
         return;
     }
 
+    // Calcul de l'accélération estimée
     const T = samplesFilt.map(s => s.t);
     const V = samplesFilt.map(s => Math.hypot(s.vx, s.vy));
-    const Y = samplesFilt.map(s => s.y);
-
     let num = 0, den = 0;
     for (let i = 0; i < T.length; i++) {
         if (Number.isFinite(V[i]) && Number.isFinite(T[i])) {
@@ -314,21 +300,27 @@ function finalize() {
         }
     }
     const aEst = den ? num / den : NaN;
+
+    // Calcul de l'accélération théorique
     const alphaDeg = Number(angleInput.value) || 0;
     const aTheory = 9.8 * Math.sin(alphaDeg * Math.PI / 180);
 
+    // Mise à jour des éléments HTML
     aEstimatedSpan.textContent = Number.isFinite(aEst) ? aEst.toFixed(4) : "—";
     aTheorySpan.textContent = aTheory.toFixed(4);
     regEquationP.textContent = Number.isFinite(aEst) ? `v = ${aEst.toFixed(4)} · t` : "Équation : —";
 
+    // Création des graphiques
     buildCharts(samplesFilt, aEst);
 
+    // Affichage des graphiques MRU ou MRUV selon l'angle
     if (alphaDeg === 0) {
         buildDoc2_MRU(samplesFilt);
     } else {
         buildDoc3_MRUV(samplesFilt);
     }
 
+    // Activation du bouton d'export CSV
     exportCSVBtn.disabled = false;
 }
 
@@ -338,8 +330,10 @@ function buildCharts(filteredSamples, aEst) {
     const Y = filteredSamples.map(s => s.y);
     const V = filteredSamples.map(s => Math.hypot(s.vx, s.vy));
 
+    // Graphique de position
+    const posCtx = document.getElementById("posChart").getContext("2d");
     if (posChart) posChart.destroy();
-    posChart = new Chart(document.getElementById("posChart"), {
+    posChart = new Chart(posCtx, {
         type: 'line',
         data: {
             labels: T,
@@ -358,8 +352,10 @@ function buildCharts(filteredSamples, aEst) {
         }
     });
 
+    // Graphique de vitesse
+    const velCtx = document.getElementById("velChart").getContext("2d");
     if (velChart) velChart.destroy();
-    velChart = new Chart(document.getElementById("velChart"), {
+    velChart = new Chart(velCtx, {
         type: 'line',
         data: {
             labels: T,
@@ -378,15 +374,16 @@ function buildCharts(filteredSamples, aEst) {
         }
     });
 
+    // Graphique de régression
+    const fitCtx = document.getElementById("fitChart").getContext("2d");
+    if (fitChart) fitChart.destroy();
     const points = T.map((t, i) => ({ x: t, y: V[i] }));
     const fitLine = T.map(t => ({ x: t, y: aEst * t }));
-
-    if (fitChart) fitChart.destroy();
-    fitChart = new Chart(document.getElementById("fitChart"), {
+    fitChart = new Chart(fitCtx, {
         type: 'scatter',
         data: {
             datasets: [
-                { label: 'Vitesse filtrée', data: points, pointRadius: 3 },
+                { label: 'Vitesse filtrée', data: points, pointRadius: 3, backgroundColor: 'red' },
                 { label: 'Ajustement v = a·t', data: fitLine, type: 'line', borderColor: 'orange', fill: false }
             ]
         },
@@ -406,10 +403,11 @@ function buildDoc2_MRU(samples) {
         console.warn("Canvas #doc2Chart non trouvé dans le DOM.");
         return;
     }
+    const ctx = canvas.getContext("2d");
     if (doc2Chart) doc2Chart.destroy();
     const T = samples.map(s => s.t);
     const X = samples.map(s => s.x);
-    doc2Chart = new Chart(canvas, {
+    doc2Chart = new Chart(ctx, {
         type: "line",
         data: {
             labels: T,
@@ -439,10 +437,12 @@ function buildDoc3_MRUV(samples) {
         console.warn("Canvas #doc3Chart non trouvé dans le DOM.");
         return;
     }
+    const ctx = canvas.getContext("2d");
     if (doc3Chart) doc3Chart.destroy();
     const T = samples.map(s => s.t);
     const Y = samples.map(s => s.y);
 
+    // Régression quadratique
     const n = T.length;
     let S0 = n, S1 = 0, S2 = 0, S3 = 0, S4 = 0;
     let SX = 0, STX = 0, ST2X = 0;
@@ -476,7 +476,7 @@ function buildDoc3_MRUV(samples) {
     const a = 2 * A;
     const fit = T.map(t => A * t * t + B * t + C);
 
-    doc3Chart = new Chart(canvas, {
+    doc3Chart = new Chart(ctx, {
         type: "line",
         data: {
             labels: T,
@@ -524,3 +524,82 @@ slowMoBtn.addEventListener("click", () => {
         slowMoBtn.textContent = "Ralenti ×0.25";
     }
 });
+
+/* ------------------------- Kalman Filter ------------------------- */
+function createKalman() {
+    let x = [[0], [0], [0], [0]]; // [x, vx, y, vy]
+    let P = [[1e3, 0, 0, 0], [0, 1e3, 0, 0], [0, 0, 1e3, 0], [0, 0, 0, 1e3]];
+    const qPos = 1e-5, qVel = 1e-3;
+    const Q = [[qPos, 0, 0, 0], [0, qVel, 0, 0], [0, 0, qPos, 0], [0, 0, 0, qVel]];
+    const H = [[1, 0, 0, 0], [0, 0, 1, 0]];
+    const R = [[1e-6, 0], [0, 1e-6]];
+
+    function predict(dt) {
+        const F = [[1, dt, 0, 0], [0, 1, 0, 0], [0, 0, 1, dt], [0, 0, 0, 1]];
+        x = matMul(F, x);
+        P = add(matMul(matMul(F, P), transpose(F)), Q);
+    }
+
+    function update(z) {
+        const y_resid = sub(z, matMul(H, x));
+        const S = add(matMul(matMul(H, P), transpose(H)), R);
+        const K = matMul(matMul(P, transpose(H)), inv2x2(S));
+        x = add(x, matMul(K, y_resid));
+        const I = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
+        const KH = matMul(K, H);
+        P = matMul(sub(I, KH), P);
+    }
+
+    function setFromMeasurement(z) {
+        x = [[z[0][0]], [0], [z[1][0]], [0]];
+        P = [[1e-1, 0, 0, 0], [0, 1e-1, 0, 0], [0, 0, 1e-1, 0], [0, 0, 0, 1e-1]];
+    }
+
+    function getState() {
+        return { x: x[0][0], vx: x[1][0], y: x[2][0], vy: x[3][0] };
+    }
+
+    return { predict, update, getState, setFromMeasurement };
+}
+
+/* ------------------------- Matrix helpers ------------------------- */
+function identity(n, scale = 1) {
+    return Array.from({ length: n }, (_, i) =>
+        Array.from({ length: n }, (_, j) => (i === j ? scale : 0))
+    );
+}
+
+function transpose(A) {
+    return A[0].map((_, c) => A.map(r => r[c]));
+}
+
+function matMul(A, B) {
+    const aR = A.length, aC = A[0].length, bC = B[0].length;
+    const C = Array.from({ length: aR }, () =>
+        Array.from({ length: bC }, () => 0)
+    );
+    for (let i = 0; i < aR; i++) {
+        for (let k = 0; k < aC; k++) {
+            const aik = A[i][k];
+            for (let j = 0; j < bC; j++) {
+                C[i][j] += aik * B[k][j];
+            }
+        }
+    }
+    return C;
+}
+
+function add(A, B) {
+    return A.map((row, i) => row.map((v, j) => v + B[i][j]));
+}
+
+function sub(A, B) {
+    return A.map((row, i) => row.map((v, j) => v - B[i][j]));
+}
+
+function inv2x2(M) {
+    const a = M[0][0], b = M[0][1], c = M[1][0], d = M[1][1];
+    const det = a * d - b * c;
+    if (Math.abs(det) < 1e-12) return [[1e12, 0], [0, 1e12]];
+    return [[d / det, -b / det], [-c / det, a / det]];
+}
