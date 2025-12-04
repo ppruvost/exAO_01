@@ -1,11 +1,85 @@
-body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:12px; color:#222 }
-header h1 { margin:0 0 10px }
-.camRow { display:flex; gap:12px; align-items:flex-start }
-video, canvas { border:1px solid #ccc; width:640px; height:480px; background:#000 }
-.controls { margin-top:8px }
-.meta { margin-top:8px }
-#results { margin-top:18px }
-canvas#posChart, canvas#velChart { max-width:900px; height:300px; margin-bottom:12px }
-table { border-collapse:collapse; width:900px }
-th, td { border:1px solid #ddd; padding:6px; text-align:center }
-.export { margin-top:8px }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  margin: 12px;
+  color: #222;
+}
+
+header h1 {
+  margin: 0 0 10px;
+}
+
+.camRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+video, canvas {
+  border: 1px solid #ccc;
+  width: 640px;
+  height: 480px;
+  background: #000;
+}
+
+.controls {
+  margin-top: 8px;
+}
+
+.meta {
+  margin-top: 8px;
+}
+
+#results {
+  margin-top: 18px;
+}
+
+canvas#posChart,
+canvas#velChart,
+canvas#fitChart,
+canvas#doc2Chart,
+canvas#doc3Chart {
+  max-width: 900px;
+  height: 300px;
+  margin-bottom: 12px;
+  border: 1px solid #ccc;
+}
+
+table {
+  border-collapse: collapse;
+  width: 900px;
+  margin-bottom: 12px;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 6px;
+  text-align: center;
+}
+
+.export {
+  margin-top: 8px;
+}
+
+button {
+  padding: 6px 12px;
+  margin-right: 8px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+input[type="number"] {
+  padding: 4px;
+  margin-right: 8px;
+}
+
+label {
+  margin-right: 12px;
+}
