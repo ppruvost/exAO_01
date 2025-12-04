@@ -1,9 +1,9 @@
 /*************************************************************
  * script.js - exAO_01 avec calibration par mire (8,5 cm)
  ************************************************************/
+
 /* ------------------------- CONFIG ------------------------- */
 const REAL_DIAM_M = 0.085; // Diamètre réel de la mire : 8,5 cm
-const MIN_PIXELS_FOR_DETECT = 40;
 
 /* ------------------------- STATE ------------------------- */
 let recordedChunks = [];
@@ -29,7 +29,7 @@ const fileInput = document.getElementById("fileInput");
 const processBtn = document.getElementById("processBtn");
 const slowMoBtn = document.getElementById("slowMoBtn");
 const frameStepMsInput = document.getElementById("frameStepMs");
-const angleInput = document.getElementById("angleInput");
+const angleDisplay = document.getElementById("angleDisplay");
 const recStateP = document.getElementById("recState");
 const blobSizeP = document.getElementById("blobSize");
 const nSamplesSpan = document.getElementById("nSamples");
@@ -46,7 +46,7 @@ let fitChart = null;
 let doc2Chart = null;
 let doc3Chart = null;
 
-/* ---------------------- Inclinaison du rail ----------------------------------- */
+/* ---------------------- Inclinaison du rail ------------------------- */
 let isOpenCvReady = false;
 
 function onOpenCvReady() {
@@ -114,17 +114,20 @@ async function startPreview() {
         setInterval(() => {
             try {
                 ctx.drawImage(preview, 0, 0, previewCanvas.width, previewCanvas.height);
-                // Détecter l'angle du rail
-                const railAngle = detectRailAngle();
-                if (railAngle !== null) {
-                    angleInput.value = railAngle;
-                }
+                updateAngleDisplay();
             } catch (e) {
                 console.error("Erreur dans la prévisualisation :", e);
             }
         }, 120);
     } catch (e) {
         console.warn("La prévisualisation a échoué :", e);
+    }
+}
+
+function updateAngleDisplay() {
+    const railAngle = detectRailAngle();
+    if (railAngle !== null) {
+        angleDisplay.textContent = railAngle;
     }
 }
 
@@ -275,7 +278,7 @@ function finalize() {
     const aEst = den ? num / den : NaN;
 
     // Calcul de l'accélération théorique
-    const alphaDeg = Number(angleInput.value) || 0;
+    const alphaDeg = Number(angleDisplay.textContent) || 0;
     const aTheory = 9.8 * Math.sin(alphaDeg * Math.PI / 180);
 
     // Mise à jour des éléments HTML
