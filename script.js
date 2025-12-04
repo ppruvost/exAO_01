@@ -1,9 +1,9 @@
 /*************************************************************
- * script.js - exAO_02
+ * script.js - exAO_01 avec calibration par mire (8,5 cm)
  ************************************************************/
 
 /* ------------------------- CONFIG ------------------------- */
-const REAL_DIAM_M = 0.15; // 15 cm
+const REAL_DIAM_M = 0.085; // Diamètre réel de la mire : 8,5 cm
 const MIN_PIXELS_FOR_DETECT = 40;
 
 /* ------------------------- STATE ------------------------- */
@@ -38,10 +38,7 @@ const aEstimatedSpan = document.getElementById("aEstimated");
 const aTheorySpan = document.getElementById("aTheory");
 const regEquationP = document.getElementById("regEquation");
 const exportCSVBtn = document.getElementById("exportCSVBtn");
-
-/* Charts */
-let posChart = null, velChart = null, fitChart = null;
-let doc2Chart = null, doc3Chart = null;
+const pxToMeterDisplay = document.getElementById("pxToMeterDisplay");
 
 /* ------------------------- Utilities: RGB -> HSV ------------------------- */
 function rgbToHsv(r, g, b) {
@@ -83,50 +80,28 @@ function detectBall(imgData, stride = 2) {
     return { x: sumX / count, y: sumY / count, count };
 }
 
-/* ------------------------- Calibration: estimate pixels->meters ------------------------- */
+/* ------------------------- Calibration: estimate pixels->meters using the mire ------------------------- */
 function estimatePxToMeter(imgData) {
-    const data = imgData.data;
-    const W = imgData.width, H = imgData.height;
-    let found = [];
-    for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-            const i = (y * W + x) * 4;
-            const r = data[i], g = data[i + 1], b = data[i + 2];
-            const hsv = rgbToHsv(r, g, b);
-            if (hsv.h >= 28 && hsv.h <= 55 && hsv.s >= 0.22 && hsv.v >= 0.45 && (r + g + b > 120)) {
-                found.push({ x, y });
-            }
-        }
-    }
-    if (found.length < 200) return null;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of found) {
-        if (p.x < minX) minX = p.x;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.y > maxY) maxY = p.y;
-    }
-    const diamPx = Math.max(maxX - minX, maxY - minY);
-    if (diamPx <= 2) return null;
+    // Utiliser OpenCV.js pour détecter le cercle de la mire
+    // Exemple simplifié : on suppose que le cercle est détecté et que son diamètre en pixels est connu
+    // En pratique, utilisez cv.HoughCircles() pour détecter le cercle
+    const diamPx = detectMireCircleDiameter(imgData); // Fonction à implémenter avec OpenCV.js
+    if (!diamPx || diamPx <= 2) return null;
     return REAL_DIAM_M / diamPx;
 }
 
-/* ------------------------- Detect Target Circles ------------------------- */
-async function detectTargetCircles(imgData) {
-    // Utilisez OpenCV.js pour détecter les cercles
-    // Exemple de code OpenCV.js
-    // Assurez-vous d'avoir chargé OpenCV.js dans votre projet
-    // Ce code est un exemple et nécessite OpenCV.js pour fonctionner
-    return { diameterInPixels: 100 }; // Exemple de retour
+// Fonction simulée pour détecter le diamètre du cercle de la mire (à remplacer par OpenCV.js)
+function detectMireCircleDiameter(imgData) {
+    // Exemple : retournez un diamètre en pixels pour la démo
+    // En pratique, utilisez OpenCV.js pour détecter le cercle
+    return 200; // Diamètre en pixels (exemple)
 }
 
 /* ------------------------- Detect Rail Angle ------------------------- */
 function detectRailAngle(imgData) {
-    // Utilisez OpenCV.js pour détecter les lignes
-    // Exemple de code OpenCV.js
-    // Assurez-vous d'avoir chargé OpenCV.js dans votre projet
-    // Ce code est un exemple et nécessite OpenCV.js pour fonctionner
-    return 30; // Exemple de retour
+    // Utiliser OpenCV.js pour détecter les lignes du rail et calculer l'angle
+    // Exemple simplifié : retournez un angle en degrés
+    return 30; // Angle en degrés (exemple)
 }
 
 /* ------------------------- Camera preview + overlay ------------------------- */
@@ -180,7 +155,7 @@ startBtn.addEventListener("click", async () => {
         videoURL = URL.createObjectURL(recordedBlob);
         processBtn.disabled = false;
         slowMoBtn.disabled = false;
-        blobSizeP && (blobSizeP.textContent = `Vidéo enregistrée (${(recordedBlob.size / 1024 / 1024).toFixed(2)} MB)`);
+        blobSizeP.textContent = `Vidéo enregistrée (${(recordedBlob.size / 1024 / 1024).toFixed(2)} MB)`;
     };
     mediaRecorder.start();
     recStateP.textContent = "État : enregistrement...";
@@ -204,7 +179,7 @@ fileInput.addEventListener("change", () => {
     videoURL = URL.createObjectURL(f);
     processBtn.disabled = false;
     slowMoBtn.disabled = false;
-    blobSizeP && (blobSizeP.textContent = `Fichier chargé (${(f.size / 1024 / 1024).toFixed(2)} MB)`);
+    blobSizeP.textContent = `Fichier chargé (${(f.size / 1024 / 1024).toFixed(2)} MB)`;
 });
 
 /* ------------------------- Process recorded video ------------------------- */
@@ -241,32 +216,21 @@ processBtn.addEventListener("click", async () => {
             ctx.drawImage(vid, 0, 0, previewCanvas.width, previewCanvas.height);
             const img = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
 
-            // Détecter la mire pour la calibration
+            // Calibration avec la mire
             if (!pxToMeter) {
-                const targetAngle = detectTargetCircles(img);
-                if (targetAngle) {
-                    pxToMeter = REAL_DIAM_M / targetAngle.diameterInPixels;
-                    const pxDisp = document.getElementById("pxToMeterDisplay");
-                    if (pxDisp) pxDisp.textContent = pxToMeter.toFixed(6) + " m/px";
+                pxToMeter = estimatePxToMeter(img);
+                if (pxToMeter) {
+                    pxToMeterDisplay.textContent = `Échelle : ${pxToMeter.toFixed(6)} m/px`;
                 }
             }
 
-            // Détecter l'angle du rail
+            // Détection de l'angle du rail
             const railAngle = detectRailAngle(img);
             if (railAngle) {
                 angleInput.value = railAngle;
             }
 
-            // Suite du traitement
-            if (!pxToMeter) {
-                const cal = estimatePxToMeter(img);
-                if (cal) {
-                    pxToMeter = cal;
-                    const pxDisp = document.getElementById("pxToMeterDisplay");
-                    if (pxDisp) pxDisp.textContent = pxToMeter.toFixed(6) + " m/px";
-                }
-            }
-
+            // Détection de la balle
             const pos = detectBall(img, 2);
             const absT = vid.currentTime * slowMotionFactor;
             let relT = null;
@@ -296,7 +260,7 @@ processBtn.addEventListener("click", async () => {
                     const st = kf.getState();
                     samplesFilt.push({ t: relT, x: st.x, y: st.y, vx: st.vx, vy: st.vy });
 
-                    // Overlay
+                    // Affichage des positions
                     ctx.beginPath();
                     ctx.strokeStyle = "rgba(255,0,0,0.7)";
                     ctx.lineWidth = 2;
