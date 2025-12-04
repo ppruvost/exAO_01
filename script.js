@@ -47,44 +47,81 @@ let fitChart = null;
 let doc2Chart = null;
 let doc3Chart = null;
 
-/* ------------------------- Utilities: RGB -> HSV ------------------------- */
-function rgbToHsv(r, g, b) {
-    r /= 255;
-    g /= 255;
-    b /= 255;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    let h = 0, s = 0, v = max;
-    const d = max - min;
-    s = max === 0 ? 0 : d / max;
-    if (d !== 0) {
-        if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
-        else if (max === g) h = (b - r) / d + 2;
-        else h = (r - g) / d + 4;
-        h *= 60;
-    }
-    return { h, s, v };
+/* ---------------------- inclinaison du rail ----------------------------------- */
+let isOpenCvReady = false;
+
+function onOpenCvReady() {
+  console.log("OpenCV.js est prêt !");
+  isOpenCvReady = true;
 }
 
-/* ------------------------- Detection: tuned HSV for light brown / ochre ------------------------- */
-function detectBall(imgData, stride = 2) {
-    const data = imgData.data;
-    const W = imgData.width, H = imgData.height;
-    let sumX = 0, sumY = 0, count = 0;
-    for (let y = 0; y < H; y += stride) {
-        for (let x = 0; x < W; x += stride) {
-            const i = (y * W + x) * 4;
-            const r = data[i], g = data[i + 1], b = data[i + 2];
-            const hsv = rgbToHsv(r, g, b);
-            const ok = hsv.h >= 28 && hsv.h <= 55 && hsv.s >= 0.22 && hsv.v >= 0.45;
-            if (!ok) continue;
-            if (r + g + b < 120) continue;
-            sumX += x;
-            sumY += y;
-            count++;
-        }
+function detectRailAngle(imgData) {
+  if (!isOpenCvReady) {
+    console.error("OpenCV.js n'est pas prêt.");
+    return null;
+  }
+
+  // Convertir l'image en format OpenCV
+  const src = cv.imread(previewCanvas);
+  const gray = new cv.Mat();
+  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+  // Appliquer un filtre de Canny pour détecter les contours
+  const edges = new cv.Mat();
+  cv.Canny(gray, edges, 50, 150, 3);
+
+  // Détecter les lignes avec la transformation de Hough
+  const lines = new cv.Mat();
+  cv.HoughLinesP(edges, lines, 1, Math.PI / 180, 50, 50, 10);
+
+  // Trouver la ligne principale et calculer son angle
+  let maxLength = 0;
+  let mainLineAngle = 0;
+
+  for (let i = 0; i < lines.rows; ++i) {
+    const startPoint = new cv.Point(lines.data32S[i * 4], lines.data32S[i * 4 + 1]);
+    const endPoint = new cv.Point(lines.data32S[i * 4 + 2], lines.data32S[i * 4 + 3]);
+
+    // Calculer la longueur de la ligne
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+
+    // Si cette ligne est plus longue que la ligne principale actuelle, la prendre comme nouvelle ligne principale
+    if (length > maxLength) {
+      maxLength = length;
+      mainLineAngle = Math.atan2(dy, dx) * 180 / Math.PI;
     }
-    if (count < MIN_PIXELS_FOR_DETECT) return null;
-    return { x: sumX / count, y: sumY / count, count };
+  }
+
+  // Convertir l'angle en une valeur positive et au 1/10 de degré près
+  mainLineAngle = Math.abs(mainLineAngle);
+  mainLineAngle = Math.round(mainLineAngle * 10) / 10;
+
+  // Libérer les matrices OpenCV
+  src.delete();
+  gray.delete();
+  edges.delete();
+  lines.delete();
+
+  return mainLineAngle;
+}
+/* ------------------------------------------------------------------------- */
+function processFrame() {
+  try {
+    ctx.drawImage(vid, 0, 0, previewCanvas.width, previewCanvas.height);
+    const img = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
+
+    // Détecter l'angle du rail
+    const railAngle = detectRailAngle(previewCanvas);
+    if (railAngle !== null) {
+      angleInput.value = railAngle;
+    }
+
+    // Suite du traitement...
+  } catch (err) {
+    console.error("processFrame error", err);
+  }
 }
 
 /* ------------------------- Calibration: estimate pixels->meters using the mire ------------------------- */
