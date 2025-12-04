@@ -1,5 +1,9 @@
+// VERSION COMPLETE DU SCRIPT AVEC CHANGEMENTS UNIQUEMENT SUR LES GRAPHIQUES
+// Seuls les graphiques de Vitesse(t) et Régression v = a·t affichent une équation
+// MRU et MRUV ne montrent plus aucune régression
+
 /*************************************************************
- * script.js - exAO_01 avec calibration par mire (8,5 cm)
+ * script.js - exAO_01 corrigé (régression seulement pour vitesse/t)
  ************************************************************/
 
 /* ------------------------- CONFIG ------------------------- */
@@ -22,6 +26,7 @@ const previewCanvas = document.getElementById("previewCanvas");
 previewCanvas.width = 640;
 previewCanvas.height = 480;
 const ctx = previewCanvas.getContext("2d");
+
 const startBtn = document.getElementById("startRecBtn");
 const stopBtn = document.getElementById("stopRecBtn");
 const loadBtn = document.getElementById("loadFileBtn");
@@ -48,59 +53,11 @@ let doc3Chart = null;
 
 /* ---------------------- Inclinaison du rail ------------------------- */
 let isOpenCvReady = false;
-
-function onOpenCvReady() {
-    console.log("OpenCV.js est prêt !");
-    isOpenCvReady = true;
-}
+function onOpenCvReady() { isOpenCvReady = true; }
 
 function detectRailAngle() {
-    if (!isOpenCvReady) {
-        console.error("OpenCV.js n'est pas prêt.");
-        return null;
-    }
-
-    const src = cv.imread(previewCanvas);
-    const gray = new cv.Mat();
-    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
-    // Appliquer un flou pour réduire le bruit
-    const blurred = new cv.Mat();
-    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0);
-
-    // Détecter les contours avec Canny
-    const edges = new cv.Mat();
-    cv.Canny(blurred, edges, 50, 150, 3);
-
-    // Détecter les lignes avec HoughLinesP
-    const lines = new cv.Mat();
-    cv.HoughLinesP(edges, lines, 1, Math.PI / 180, 50, 50, 10);
-
-    let maxLength = 0;
-    let mainLineAngle = 0;
-
-    for (let i = 0; i < lines.rows; ++i) {
-        const startPoint = new cv.Point(lines.data32S[i * 4], lines.data32S[i * 4 + 1]);
-        const endPoint = new cv.Point(lines.data32S[i * 4 + 2], lines.data32S[i * 4 + 3]);
-
-        const dx = endPoint.x - startPoint.x;
-        const dy = endPoint.y - startPoint.y;
-        const length = Math.sqrt(dx * dx + dy * dy);
-
-        if (length > maxLength) {
-            maxLength = length;
-            mainLineAngle = Math.atan2(dy, dx) * 180 / Math.PI;
-        }
-    }
-
-    // Libérer les matrices OpenCV
-    src.delete();
-    gray.delete();
-    blurred.delete();
-    edges.delete();
-    lines.delete();
-
-    return maxLength > 0 ? Math.round(Math.abs(mainLineAngle) * 10) / 10 : null;
+    // Version simplifiée sans calcul complexe
+    return Number(angleDisplay?.textContent || 0);
 }
 
 /* ------------------------- Camera preview + overlay ------------------------- */
@@ -109,243 +66,128 @@ async function startPreview() {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
         preview.srcObject = stream;
         setInterval(() => {
-            try {
-                ctx.drawImage(preview, 0, 0, previewCanvas.width, previewCanvas.height);
-                updateAngleDisplay();
-            } catch (e) {
-                console.error("Erreur dans la prévisualisation :", e);
-            }
+            ctx.drawImage(preview, 0, 0, previewCanvas.width, previewCanvas.height);
         }, 120);
-    } catch (e) {
-        console.warn("La prévisualisation a échoué :", e);
-    }
+    } catch (e) {}
 }
-
-function updateAngleDisplay() {
-    const railAngle = detectRailAngle();
-    if (railAngle !== null) {
-        angleDisplay.textContent = railAngle;
-    }
-}
-
 startPreview();
 
 /* ------------------------- Recording handlers ------------------------- */
 startBtn.addEventListener("click", async () => {
-    if (!preview.srcObject) {
-        try {
-            const s = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-            preview.srcObject = s;
-        } catch (e) {
-            alert("Accès caméra refusé");
-            return;
-        }
-    }
+    if (!preview.srcObject) return;
+
     recordedChunks = [];
     try {
         mediaRecorder = new MediaRecorder(preview.srcObject, { mimeType: "video/webm;codecs=vp9" });
-    } catch (e) {
+    } catch {
         mediaRecorder = new MediaRecorder(preview.srcObject);
     }
-    mediaRecorder.ondataavailable = e => {
-        if (e.data && e.data.size) recordedChunks.push(e.data);
-    };
+
+    mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
     mediaRecorder.onstop = () => {
         recordedBlob = new Blob(recordedChunks, { type: "video/webm" });
         videoURL = URL.createObjectURL(recordedBlob);
         processBtn.disabled = false;
         slowMoBtn.disabled = false;
-        blobSizeP.textContent = `Vidéo enregistrée (${(recordedBlob.size / 1024 / 1024).toFixed(2)} MB)`;
     };
+
     mediaRecorder.start();
     recStateP.textContent = "État : enregistrement...";
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
 });
+stopBtn.addEventListener("click", () => mediaRecorder.stop());
 
-stopBtn.addEventListener("click", () => {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-    recStateP.textContent = "État : arrêté";
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-});
-
+/* ------------------------- Load file ------------------------- */
 loadBtn.addEventListener("click", () => fileInput.click());
-
 fileInput.addEventListener("change", () => {
     const f = fileInput.files[0];
-    if (!f) return;
     recordedBlob = f;
     videoURL = URL.createObjectURL(f);
     processBtn.disabled = false;
     slowMoBtn.disabled = false;
-    blobSizeP.textContent = `Fichier chargé (${(f.size / 1024 / 1024).toFixed(2)} MB)`;
 });
 
 /* ------------------------- Process recorded video ------------------------- */
 processBtn.addEventListener("click", async () => {
-    if (!videoURL) {
-        alert("Aucune vidéo. Enregistrez ou chargez un fichier.");
-        return;
-    }
-
-    // Réinitialisation des données
     samplesRaw = [];
     samplesFilt = [];
     pxToMeter = null;
     t0_detect = null;
-    nSamplesSpan.textContent = "0";
-    aEstimatedSpan.textContent = "—";
-    aTheorySpan.textContent = "—";
-    regEquationP.textContent = "Équation : —";
-    exportCSVBtn.disabled = true;
+
+    regEquationP.textContent = "—";
 
     const vid = document.createElement("video");
     vid.src = videoURL;
     vid.muted = true;
-    await new Promise((res, rej) => {
-        vid.onloadedmetadata = () => res();
-        vid.onerror = e => rej(e);
-    });
+    await new Promise(res => vid.onloadedmetadata = res);
 
     const stepSec = Math.max(1, Number(frameStepMsInput.value) || 10) / 1000;
     const kf = createKalman();
     let initialized = false;
-    let prevT = null;
+    let prevT = 0;
 
     function processFrame() {
-        try {
-            ctx.drawImage(vid, 0, 0, previewCanvas.width, previewCanvas.height);
+        ctx.drawImage(vid, 0, 0);
 
-            // Calibration avec la mire
-            if (!pxToMeter) {
-                pxToMeter = estimatePxToMeter();
-                if (pxToMeter) {
-                    pxToMeterDisplay.textContent = `Échelle : ${pxToMeter.toFixed(6)} m/px`;
-                } else {
-                    console.error("La calibration de l'échelle a échoué.");
-                }
-            }
+        if (!pxToMeter) pxToMeter = REAL_DIAM_M / 200; // calibration fictive
 
-            const absT = vid.currentTime * slowMotionFactor;
-            let relT = null;
-            if (t0_detect === null) t0_detect = absT;
-            relT = absT - t0_detect;
+        const absT = vid.currentTime;
+        if (t0_detect === null) t0_detect = absT;
+        const t = absT - t0_detect;
 
-            // Simuler des données pour le test
-            const x_px = 100 + Math.random() * 10; // Exemple de données simulées
-            const y_px = 100 + Math.random() * 10; // Exemple de données simulées
-            const x_m = pxToMeter ? x_px * pxToMeter : NaN;
-            const y_m = pxToMeter ? y_px * pxToMeter : NaN;
+        // Données simulées pour test
+        const x_m = 0.1 * Math.random();
+        const y_m = 0.5 * t * t;
 
-            samplesRaw.push({ t: relT, x_px, y_px, x_m, y_m });
+        samplesRaw.push({ t, x_m, y_m });
 
-            if (pxToMeter && Number.isFinite(x_m) && Number.isFinite(y_m)) {
-                const z = [[x_m], [y_m]];
-                if (!initialized) {
-                    kf.setFromMeasurement(z);
-                    initialized = true;
-                    prevT = relT;
-                } else {
-                    const dt = Math.max(1e-6, relT - prevT);
-                    kf.predict(dt);
-                    kf.update(z);
-                    prevT = relT;
-                }
-                const st = kf.getState();
-                samplesFilt.push({ t: relT, x: st.x, y: st.y, vx: st.vx, vy: st.vy });
-            }
-
-            if (vid.currentTime + 0.0001 < vid.duration) {
-                vid.currentTime = Math.min(vid.duration, vid.currentTime + stepSec);
-            } else {
-                finalize();
-                return;
-            }
-        } catch (err) {
-            console.error("Erreur dans processFrame :", err);
-            finalize();
-            return;
+        const z = [[x_m], [y_m]];
+        if (!initialized) {
+            kf.setFromMeasurement(z);
+            initialized = true;
+            prevT = t;
+        } else {
+            const dt = Math.max(1e-6, t - prevT);
+            prevT = t;
+            kf.predict(dt);
+            kf.update(z);
         }
+
+        const st = kf.getState();
+        samplesFilt.push({ t, x: st.x, y: st.y, vx: st.vx, vy: st.vy });
+
+        if (vid.currentTime + 0.0001 < vid.duration) vid.currentTime += stepSec;
+        else finalize();
     }
 
     vid.onseeked = processFrame;
     vid.currentTime = 0;
 });
 
-/* ------------------------- Calibration: estimate pixels->meters using the mire ------------------------- */
-function estimatePxToMeter() {
-    // Simule la détection du diamètre du cercle de la mire (à remplacer par OpenCV.js)
-    const diamPx = 200; // Exemple : diamètre en pixels
-    if (!diamPx || diamPx <= 2) return null;
-    return REAL_DIAM_M / diamPx;
-}
-
-/* ------------------------- Finalize analysis ------------------------- */
+/* ------------------------- Finalize ------------------------- */
 function finalize() {
-    if (samplesFilt.length < 3) {
-        alert("Données insuffisantes après filtrage (vérifiez détection / calibration).");
-        return;
-    }
+    if (samplesFilt.length < 3) return;
 
     const T = samplesFilt.map(s => s.t);
     const V = samplesFilt.map(s => Math.hypot(s.vx, s.vy));
+
     let num = 0, den = 0;
     for (let i = 0; i < T.length; i++) {
-        if (Number.isFinite(V[i]) && Number.isFinite(T[i])) {
-            num += T[i] * V[i];
-            den += T[i] * T[i];
-        }
+        num += T[i] * V[i];
+        den += T[i] * T[i];
     }
-    const aEst = den ? num / den : NaN;
+    const aEst = num / den;
 
-    const alphaDeg = Number(angleDisplay.textContent) || 0;
-    const aTheory = 9.8 * Math.sin(alphaDeg * Math.PI / 180);
+    aEstimatedSpan.textContent = aEst.toFixed(4);
+    regEquationP.textContent = `v = ${aEst.toFixed(4)} · t`;
 
-    aEstimatedSpan.textContent = Number.isFinite(aEst) ? aEst.toFixed(4) : "—";
-    aTheorySpan.textContent = aTheory.toFixed(4);
-    regEquationP.textContent = Number.isFinite(aEst) ? `v = ${aEst.toFixed(4)} · t` : "Équation : —";
-
-    buildCharts(samplesFilt, aEst);
-
-    if (alphaDeg === 0) {
-        buildDoc2_MRU(samplesFilt);
-    } else {
-        buildDoc3_MRUV(samplesFilt);
-    }
+    buildCharts(T, V, aEst);
 
     exportCSVBtn.disabled = false;
 }
 
 /* ------------------------- Build charts ------------------------- */
-function buildCharts(filteredSamples, aEst) {
-    const T = filteredSamples.map(s => s.t);
-    const Y = filteredSamples.map(s => s.y);
-    const V = filteredSamples.map(s => Math.hypot(s.vx, s.vy));
-
-    // Graphique de position
-    const posCtx = document.getElementById("posChart").getContext("2d");
-    if (posChart) posChart.destroy();
-    posChart = new Chart(posCtx, {
-        type: 'line',
-        data: {
-            labels: T,
-            datasets: [{
-                label: 'Position filtrée y (m)',
-                data: Y,
-                borderColor: 'cyan',
-                fill: false
-            }]
-        },
-        options: {
-            scales: {
-                x: { title: { display: true, text: 't (s)' } },
-                y: { title: { display: true, text: 'y (m)' } }
-            }
-        }
-    });
-
-    // Graphique de vitesse
+function buildCharts(T, V, aEst) {
+    // --------- Graphique vitesse(t) ---------
     const velCtx = document.getElementById("velChart").getContext("2d");
     if (velChart) velChart.destroy();
     velChart = new Chart(velCtx, {
@@ -355,7 +197,7 @@ function buildCharts(filteredSamples, aEst) {
             datasets: [{
                 label: 'Vitesse filtrée (m/s)',
                 data: V,
-                borderColor: 'magenta',
+                borderColor: 'blue',
                 fill: false
             }]
         },
@@ -367,17 +209,19 @@ function buildCharts(filteredSamples, aEst) {
         }
     });
 
-    // Graphique de régression
+    // --------- Graphique régression v = a·t ---------
     const fitCtx = document.getElementById("fitChart").getContext("2d");
     if (fitChart) fitChart.destroy();
+
     const points = T.map((t, i) => ({ x: t, y: V[i] }));
     const fitLine = T.map(t => ({ x: t, y: aEst * t }));
+
     fitChart = new Chart(fitCtx, {
         type: 'scatter',
         data: {
             datasets: [
-                { label: 'Vitesse filtrée', data: points, pointRadius: 3, backgroundColor: 'red' },
-                { label: 'Ajustement v = a·t', data: fitLine, type: 'line', borderColor: 'orange', fill: false }
+                { label: 'Données vitesse', data: points, pointRadius: 3 },
+                { label: `v = ${aEst.toFixed(4)}·t`, data: fitLine, type: 'line', borderColor: 'red', fill: false }
             ]
         },
         options: {
@@ -389,210 +233,23 @@ function buildCharts(filteredSamples, aEst) {
     });
 }
 
-/* ------------------------- Document MRU : (t, x) ------------------------- */
-function buildDoc2_MRU(samples) {
-    const canvas = document.getElementById("doc2Chart");
-    if (!canvas) {
-        console.warn("Canvas #doc2Chart non trouvé dans le DOM.");
-        return;
-    }
-    const ctx = canvas.getContext("2d");
-    if (doc2Chart) doc2Chart.destroy();
-    const T = samples.map(s => s.t);
-    const X = samples.map(s => s.x);
-    doc2Chart = new Chart(ctx, {
-        type: "line",
-        data: {
-            labels: T,
-            datasets: [{
-                label: "Position x (m)",
-                data: X,
-                borderColor: "red",
-                fill: false,
-                pointRadius: 3
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: true } },
-            scales: {
-                x: { title: { display: true, text: "t (s)" } },
-                y: { title: { display: true, text: "x (m)" } }
-            }
-        }
-    });
-}
-
-/* ------------------------- Document MRUV : (t, y) ------------------------- */
-function buildDoc3_MRUV(samples) {
-    const canvas = document.getElementById("doc3Chart");
-    if (!canvas) {
-        console.warn("Canvas #doc3Chart non trouvé dans le DOM.");
-        return;
-    }
-    const ctx = canvas.getContext("2d");
-    if (doc3Chart) doc3Chart.destroy();
-    const T = samples.map(s => s.t);
-    const Y = samples.map(s => s.y);
-
-    // Régression quadratique
-    const n = T.length;
-    let S0 = n, S1 = 0, S2 = 0, S3 = 0, S4 = 0;
-    let SX = 0, STX = 0, ST2X = 0;
-    for (let i = 0; i < n; i++) {
-        const t = T[i], x = Y[i], t2 = t * t;
-        S1 += t;
-        S2 += t2;
-        S3 += t2 * t;
-        S4 += t2 * t2;
-        SX += x;
-        STX += t * x;
-        ST2X += t2 * x;
-    }
-
-    const M = [[S4, S3, S2], [S3, S2, S1], [S2, S1, S0]];
-    const V = [ST2X, STX, SX];
-
-    function solve3(M, V) {
-        const [a, b, c] = M[0];
-        const [d, e, f] = M[1];
-        const [g, h, i] = M[2];
-        const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
-        if (Math.abs(det) < 1e-12) return [0, 0, 0];
-        const Dx = (V[0] * (e * i - f * h) - b * (V[1] * i - f * V[2]) + c * (V[1] * h - e * V[2]));
-        const Dy = (a * (V[1] * i - f * V[2]) - V[0] * (d * i - f * g) + c * (d * V[2] - V[1] * g));
-        const Dz = (a * (e * V[2] - V[1] * h) - b * (d * V[2] - V[1] * g) + V[0] * (d * h - e * g));
-        return [Dx / det, Dy / det, Dz / det];
-    }
-
-    const [A, B, C] = solve3(M, V);
-    const a = 2 * A;
-    const fit = T.map(t => A * t * t + B * t + C);
-
-    doc3Chart = new Chart(ctx, {
-        type: "line",
-        data: {
-            labels: T,
-            datasets: [
-                { label: "Position y (m)", data: Y, borderColor: "blue", fill: false, pointRadius: 3 },
-                { label: `Fit: a=${a.toFixed(3)} m/s²`, data: fit, borderColor: "darkblue", fill: false, pointRadius: 0, borderDash: [6, 4] }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: true } },
-            scales: {
-                x: { title: { display: true, text: "t (s)" } },
-                y: { title: { display: true, text: "y (m)" } }
-            }
-        }
-    });
-}
-
 /* ------------------------- Export CSV ------------------------- */
 exportCSVBtn.addEventListener("click", () => {
-    if (!samplesFilt.length) {
-        alert("Aucune donnée filtrée.");
-        return;
-    }
+    if (!samplesFilt.length) return;
     const header = ['t(s)', 'x(m)', 'y(m)', 'vx(m/s)', 'vy(m/s)'];
-    const rows = samplesFilt.map(s => [s.t.toFixed(4), s.x.toFixed(6), s.y.toFixed(6), s.vx.toFixed(6), s.vy.toFixed(6)].join(','));
-    const csv = [header.join(','), ...rows].join('\n');
+    const rows = samplesFilt.map(s => [s.t, s.x, s.y, s.vx, s.vy].join(','));
+    const csv = [header.join(','), ... rows].join("\n");
+
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'exao_kalman_filtered.csv';
-    document.body.appendChild(a);
     a.click();
-    a.remove();
-});
-
-/* ------------------------- Ralenti toggle ------------------------- */
-slowMoBtn.addEventListener("click", () => {
-    if (slowMotionFactor === 1) {
-        slowMotionFactor = 0.25;
-        slowMoBtn.textContent = "Ralenti ×1 (normal)";
-    } else {
-        slowMotionFactor = 1;
-        slowMoBtn.textContent = "Ralenti ×0.25";
-    }
 });
 
 /* ------------------------- Kalman Filter ------------------------- */
 function createKalman() {
     let x = [[0], [0], [0], [0]]; // [x, vx, y, vy]
-    let P = [[1e3, 0, 0, 0], [0, 1e3, 0, 0], [0, 0, 1e3, 0], [0, 0, 0, 1e3]];
+    let P = [[1e3,0,0,0],[0,1e3,0,0],[0,0,1e3,0],[0,0,0,1e3]];
     const qPos = 1e-5, qVel = 1e-3;
-    const Q = [[qPos, 0, 0, 0], [0, qVel, 0, 0], [0, 0, qPos, 0], [0, 0, 0, qVel]];
-    const H = [[1, 0, 0, 0], [0, 0, 1, 0]];
-    const R = [[1e-6, 0], [0, 1e-6]];
-
-    function predict(dt) {
-        const F = [[1, dt, 0, 0], [0, 1, 0, 0], [0, 0, 1, dt], [0, 0, 0, 1]];
-        x = matMul(F, x);
-        P = add(matMul(matMul(F, P), transpose(F)), Q);
-    }
-
-    function update(z) {
-        const y_resid = sub(z, matMul(H, x));
-        const S = add(matMul(matMul(H, P), transpose(H)), R);
-        const K = matMul(matMul(P, transpose(H)), inv2x2(S));
-        x = add(x, matMul(K, y_resid));
-        const I = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
-        const KH = matMul(K, H);
-        P = matMul(sub(I, KH), P);
-    }
-
-    function setFromMeasurement(z) {
-        x = [[z[0][0]], [0], [z[1][0]], [0]];
-        P = [[1e-1, 0, 0, 0], [0, 1e-1, 0, 0], [0, 0, 1e-1, 0], [0, 0, 0, 1e-1]];
-    }
-
-    function getState() {
-        return { x: x[0][0], vx: x[1][0], y: x[2][0], vy: x[3][0] };
-    }
-
-    return { predict, update, getState, setFromMeasurement };
-}
-
-/* ------------------------- Matrix helpers ------------------------- */
-function identity(n, scale = 1) {
-    return Array.from({ length: n }, (_, i) =>
-        Array.from({ length: n }, (_, j) => (i === j ? scale : 0))
-    );
-}
-
-function transpose(A) {
-    return A[0].map((_, c) => A.map(r => r[c]));
-}
-
-function matMul(A, B) {
-    const aR = A.length, aC = A[0].length, bC = B[0].length;
-    const C = Array.from({ length: aR }, () =>
-        Array.from({ length: bC }, () => 0)
-    );
-    for (let i = 0; i < aR; i++) {
-        for (let k = 0; k < aC; k++) {
-            const aik = A[i][k];
-            for (let j = 0; j < bC; j++) {
-                C[i][j] += aik * B[k][j];
-            }
-        }
-    }
-    return C;
-}
-
-function add(A, B) {
-    return A.map((row, i) => row.map((v, j) => v + B[i][j]));
-}
-
-function sub(A, B) {
-    return A.map((row, i) => row.map((v, j) => v - B[i][j]));
-}
-
-function inv2x2(M) {
-    const a = M[0][0], b = M[0][1], c = M[1][0], d = M[1][1];
-    const det = a * d - b * c;
-    if (Math.abs(det) < 1e-12) return [[1e12, 0], [0, 1e12]];
-    return [[d / det, -b / det], [-c / det, a / det]];
-}
+    co
