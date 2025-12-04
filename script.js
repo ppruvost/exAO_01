@@ -1,7 +1,6 @@
 /*************************************************************
  * script.js - exAO_01 avec calibration par mire (8,5 cm)
  ************************************************************/
-
 /* ------------------------- CONFIG ------------------------- */
 const REAL_DIAM_M = 0.085; // Diamètre réel de la mire : 8,5 cm
 const MIN_PIXELS_FOR_DETECT = 40;
@@ -47,89 +46,64 @@ let fitChart = null;
 let doc2Chart = null;
 let doc3Chart = null;
 
-/* ---------------------- inclinaison du rail ----------------------------------- */
+/* ---------------------- Inclinaison du rail ----------------------------------- */
 let isOpenCvReady = false;
 
 function onOpenCvReady() {
-  console.log("OpenCV.js est prêt !");
-  isOpenCvReady = true;
+    console.log("OpenCV.js est prêt !");
+    isOpenCvReady = true;
 }
 
-function detectRailAngle(imgData) {
-  if (!isOpenCvReady) {
-    console.error("OpenCV.js n'est pas prêt.");
-    return null;
-  }
-
-  // Convertir l'image en format OpenCV
-  const src = cv.imread(previewCanvas);
-  const gray = new cv.Mat();
-  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
-  // Appliquer un filtre de Canny pour détecter les contours
-  const edges = new cv.Mat();
-  cv.Canny(gray, edges, 50, 150, 3);
-
-  // Détecter les lignes avec la transformation de Hough
-  const lines = new cv.Mat();
-  cv.HoughLinesP(edges, lines, 1, Math.PI / 180, 50, 50, 10);
-
-  // Trouver la ligne principale et calculer son angle
-  let maxLength = 0;
-  let mainLineAngle = 0;
-
-  for (let i = 0; i < lines.rows; ++i) {
-    const startPoint = new cv.Point(lines.data32S[i * 4], lines.data32S[i * 4 + 1]);
-    const endPoint = new cv.Point(lines.data32S[i * 4 + 2], lines.data32S[i * 4 + 3]);
-
-    // Calculer la longueur de la ligne
-    const dx = endPoint.x - startPoint.x;
-    const dy = endPoint.y - startPoint.y;
-    const length = Math.sqrt(dx * dx + dy * dy);
-
-    // Si cette ligne est plus longue que la ligne principale actuelle, la prendre comme nouvelle ligne principale
-    if (length > maxLength) {
-      maxLength = length;
-      mainLineAngle = Math.atan2(dy, dx) * 180 / Math.PI;
-    }
-  }
-
-  // Convertir l'angle en une valeur positive et au 1/10 de degré près
-  mainLineAngle = Math.abs(mainLineAngle);
-  mainLineAngle = Math.round(mainLineAngle * 10) / 10;
-
-  // Libérer les matrices OpenCV
-  src.delete();
-  gray.delete();
-  edges.delete();
-  lines.delete();
-
-  return mainLineAngle;
-}
-/* ------------------------------------------------------------------------- */
-function processFrame() {
-  try {
-    ctx.drawImage(vid, 0, 0, previewCanvas.width, previewCanvas.height);
-    const img = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
-
-    // Détecter l'angle du rail
-    const railAngle = detectRailAngle(previewCanvas);
-    if (railAngle !== null) {
-      angleInput.value = railAngle;
+function detectRailAngle() {
+    if (!isOpenCvReady) {
+        console.error("OpenCV.js n'est pas prêt.");
+        return null;
     }
 
-    // Suite du traitement...
-  } catch (err) {
-    console.error("processFrame error", err);
-  }
-}
+    // Convertir l'image en format OpenCV
+    const src = cv.imread(previewCanvas);
+    const gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-/* ------------------------- Calibration: estimate pixels->meters using the mire ------------------------- */
-function estimatePxToMeter(imgData) {
-    // Simule la détection du diamètre du cercle de la mire (à remplacer par OpenCV.js)
-    const diamPx = 200; // Exemple : diamètre en pixels
-    if (!diamPx || diamPx <= 2) return null;
-    return REAL_DIAM_M / diamPx;
+    // Appliquer un filtre de Canny pour détecter les contours
+    const edges = new cv.Mat();
+    cv.Canny(gray, edges, 50, 150, 3);
+
+    // Détecter les lignes avec la transformation de Hough
+    const lines = new cv.Mat();
+    cv.HoughLinesP(edges, lines, 1, Math.PI / 180, 50, 50, 10);
+
+    // Trouver la ligne principale et calculer son angle
+    let maxLength = 0;
+    let mainLineAngle = 0;
+
+    for (let i = 0; i < lines.rows; ++i) {
+        const startPoint = new cv.Point(lines.data32S[i * 4], lines.data32S[i * 4 + 1]);
+        const endPoint = new cv.Point(lines.data32S[i * 4 + 2], lines.data32S[i * 4 + 3]);
+
+        // Calculer la longueur de la ligne
+        const dx = endPoint.x - startPoint.x;
+        const dy = endPoint.y - startPoint.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+
+        // Si cette ligne est plus longue que la ligne principale actuelle, la prendre comme nouvelle ligne principale
+        if (length > maxLength) {
+            maxLength = length;
+            mainLineAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+        }
+    }
+
+    // Convertir l'angle en une valeur positive et au 1/10 de degré près
+    mainLineAngle = Math.abs(mainLineAngle);
+    mainLineAngle = Math.round(mainLineAngle * 10) / 10;
+
+    // Libérer les matrices OpenCV
+    src.delete();
+    gray.delete();
+    edges.delete();
+    lines.delete();
+
+    return mainLineAngle;
 }
 
 /* ------------------------- Camera preview + overlay ------------------------- */
@@ -140,19 +114,17 @@ async function startPreview() {
         setInterval(() => {
             try {
                 ctx.drawImage(preview, 0, 0, previewCanvas.width, previewCanvas.height);
-                const img = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
-                const pos = detectBall(img, 4);
-                if (pos) {
-                    ctx.beginPath();
-                    ctx.strokeStyle = "lime";
-                    ctx.lineWidth = 3;
-                    ctx.arc(pos.x, pos.y, 12, 0, Math.PI * 2);
-                    ctx.stroke();
+                // Détecter l'angle du rail
+                const railAngle = detectRailAngle();
+                if (railAngle !== null) {
+                    angleInput.value = railAngle;
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.error("Erreur dans la prévisualisation :", e);
+            }
         }, 120);
     } catch (e) {
-        console.warn("preview failed", e);
+        console.warn("La prévisualisation a échoué :", e);
     }
 }
 
@@ -244,63 +216,19 @@ processBtn.addEventListener("click", async () => {
     function processFrame() {
         try {
             ctx.drawImage(vid, 0, 0, previewCanvas.width, previewCanvas.height);
-            const img = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
 
             // Calibration avec la mire
             if (!pxToMeter) {
-                pxToMeter = estimatePxToMeter(img);
+                pxToMeter = estimatePxToMeter();
                 if (pxToMeter) {
                     pxToMeterDisplay.textContent = `Échelle : ${pxToMeter.toFixed(6)} m/px`;
                 }
             }
 
-            // Détection de la balle
-            const pos = detectBall(img, 2);
             const absT = vid.currentTime * slowMotionFactor;
             let relT = null;
-            if (pos) {
-                if (t0_detect === null) t0_detect = absT;
-                relT = absT - t0_detect;
-            }
-
-            if (pos) {
-                const x_px = pos.x, y_px = pos.y;
-                const x_m = pxToMeter ? x_px * pxToMeter : NaN;
-                const y_m = pxToMeter ? y_px * pxToMeter : NaN;
-                samplesRaw.push({ t: relT, x_px, y_px, x_m, y_m });
-
-                if (pxToMeter && Number.isFinite(x_m) && Number.isFinite(y_m)) {
-                    const z = [[x_m], [y_m]];
-                    if (!initialized) {
-                        kf.setFromMeasurement(z);
-                        initialized = true;
-                        prevT = relT;
-                    } else {
-                        const dt = Math.max(1e-6, relT - prevT);
-                        kf.predict(dt);
-                        kf.update(z);
-                        prevT = relT;
-                    }
-                    const st = kf.getState();
-                    samplesFilt.push({ t: relT, x: st.x, y: st.y, vx: st.vx, vy: st.vy });
-
-                    // Affichage des positions
-                    ctx.beginPath();
-                    ctx.strokeStyle = "rgba(255,0,0,0.7)";
-                    ctx.lineWidth = 2;
-                    ctx.arc(x_px, y_px, 6, 0, Math.PI * 2);
-                    ctx.stroke();
-
-                    const fx_px = pxToMeter ? st.x / pxToMeter : st.x;
-                    const fy_px = pxToMeter ? st.y / pxToMeter : st.y;
-                    ctx.beginPath();
-                    ctx.strokeStyle = "cyan";
-                    ctx.lineWidth = 2;
-                    ctx.arc(fx_px, fy_px, 10, 0, Math.PI * 2);
-                    ctx.stroke();
-                    nSamplesSpan.textContent = String(samplesRaw.length);
-                }
-            }
+            if (t0_detect === null) t0_detect = absT;
+            relT = absT - t0_detect;
 
             if (vid.currentTime + 0.0001 < vid.duration) {
                 vid.currentTime = Math.min(vid.duration, vid.currentTime + stepSec);
@@ -309,7 +237,7 @@ processBtn.addEventListener("click", async () => {
                 return;
             }
         } catch (err) {
-            console.error("processFrame error", err);
+            console.error("Erreur dans processFrame :", err);
             finalize();
             return;
         }
@@ -318,6 +246,14 @@ processBtn.addEventListener("click", async () => {
     vid.onseeked = processFrame;
     vid.currentTime = 0;
 });
+
+/* ------------------------- Calibration: estimate pixels->meters using the mire ------------------------- */
+function estimatePxToMeter() {
+    // Simule la détection du diamètre du cercle de la mire (à remplacer par OpenCV.js)
+    const diamPx = 200; // Exemple : diamètre en pixels
+    if (!diamPx || diamPx <= 2) return null;
+    return REAL_DIAM_M / diamPx;
+}
 
 /* ------------------------- Finalize analysis ------------------------- */
 function finalize() {
