@@ -1,17 +1,26 @@
+/* -------------------------
+   Global
+------------------------- */
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   margin: 12px;
   color: #222;
+  background-color: #f9f9f9;
 }
 
 header h1 {
   margin: 0 0 10px;
+  font-size: 1.8em;
 }
 
+/* -------------------------
+   Caméra & prévisualisation
+------------------------- */
 .camRow {
   display: flex;
   gap: 12px;
   align-items: flex-start;
+  flex-wrap: wrap; /* responsive */
 }
 
 video, canvas {
@@ -19,8 +28,12 @@ video, canvas {
   width: 640px;
   height: 480px;
   background: #000;
+  object-fit: cover;
 }
 
+/* -------------------------
+   Contrôles & méta
+------------------------- */
 .controls {
   margin-top: 8px;
 }
@@ -29,24 +42,50 @@ video, canvas {
   margin-top: 8px;
 }
 
+input[type="number"] {
+  padding: 4px;
+  margin-right: 8px;
+  width: 60px;
+}
+
+label {
+  margin-right: 12px;
+}
+
+/* -------------------------
+   Résultats
+------------------------- */
 #results {
   margin-top: 18px;
 }
 
+main > section {
+  margin-bottom: 24px;
+}
+
+/* -------------------------
+   Graphiques
+------------------------- */
 canvas#posChart,
 canvas#velChart,
 canvas#fitChart,
 canvas#doc2Chart,
 canvas#doc3Chart {
+  width: 100%;
   max-width: 900px;
   height: 300px;
   margin-bottom: 12px;
   border: 1px solid #ccc;
+  background-color: #fff;
 }
 
+/* -------------------------
+   Tableaux
+------------------------- */
 table {
   border-collapse: collapse;
-  width: 900px;
+  width: 100%;
+  max-width: 900px;
   margin-bottom: 12px;
 }
 
@@ -56,10 +95,9 @@ th, td {
   text-align: center;
 }
 
-.export {
-  margin-top: 8px;
-}
-
+/* -------------------------
+   Boutons
+------------------------- */
 button {
   padding: 6px 12px;
   margin-right: 8px;
@@ -68,6 +106,11 @@ button {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button:hover:not(:disabled) {
+  background-color: #0056b3;
 }
 
 button:disabled {
@@ -75,11 +118,21 @@ button:disabled {
   cursor: not-allowed;
 }
 
-input[type="number"] {
-  padding: 4px;
-  margin-right: 8px;
+/* -------------------------
+   Export
+------------------------- */
+.export {
+  margin-top: 8px;
 }
 
-label {
-  margin-right: 12px;
+/* -------------------------
+   Paragraphes et métadonnées
+------------------------- */
+p, span {
+  font-size: 1em;
+}
+
+h2, h3 {
+  margin-top: 18px;
+  margin-bottom: 6px;
 }
