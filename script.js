@@ -688,8 +688,8 @@ function computePrincipalAngleDeg(samples) {
 
   // principal eigenvector of [[Sxx, Sxy],[Sxy,Syy]]
   const theta = 0.5 * Math.atan2(2 * Sxy, Sxx - Syy);
-  const deg = theta * 180 / Math.PI;
-  return deg;
+  const deg = Math.abs(theta * 180 / Math.PI);
+return deg;
 }
 
 /* ===================================================
