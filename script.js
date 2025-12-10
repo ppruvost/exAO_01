@@ -1,5 +1,5 @@
 /****************************************************
- *  script.js  — exAO v02 (version complète activée)
+ *  script.js  — exAO v03
  *
  *  - conserve tes fonctions CSV/estimation
  *  - ajoute capture vidéo, enregistrement, traitement frames,
@@ -407,7 +407,7 @@ async function processRecordedVideo() {
     const mask = new Uint8ClampedArray(canvasPreview.width * canvasPreview.height);
     if (bgImageData) {
       // bg subtraction
-      const fgThreshold = 30; // tunable
+      const fgThreshold = 50; // tunable
       for (let i = 0, p = 0; i < frame.data.length; i += 4, p++) {
         const dr = Math.abs(frame.data[i] - bgImageData.data[i]);
         const dg = Math.abs(frame.data[i+1] - bgImageData.data[i+1]);
@@ -701,6 +701,53 @@ function median(arr) {
   const m = Math.floor(s.length/2);
   return (s.length % 2 === 1) ? s[m] : 0.5*(s[m-1]+s[m]);
 }
+function detectLargestBlob(mask, w, h) {
+    const visited = new Uint8Array(w * h);
+    const dirs = [-1, 1, -w, w];
+    let largest = { area: 0, cx: null, cy: null, perimeter: 0 };
+
+    for (let i = 0; i < mask.length; i++) {
+        if (visited[i] || mask[i] === 0) continue;
+
+        let q = [i];
+        visited[i] = 1;
+        let sumX = 0, sumY = 0, count = 0;
+        let perimeter = 0;
+
+        while (q.length) {
+            const idx = q.pop();
+            const y = Math.floor(idx / w);
+            const x = idx % w;
+            sumX += x;
+            sumY += y;
+            count++;
+
+            // Calcul du périmètre (approximation)
+            if (x > 0 && mask[idx-1] === 0) perimeter++;
+            if (x < w-1 && mask[idx+1] === 0) perimeter++;
+            if (y > 0 && mask[idx-w] === 0) perimeter++;
+            if (y < h-1 && mask[idx+w] === 0) perimeter++;
+
+            // Ajout des voisins à la file
+            const neighbors = [idx - 1, idx + 1, idx - w, idx + w];
+            for (let nb of neighbors) {
+                if (nb < 0 || nb >= mask.length) continue;
+                if (visited[nb]) continue;
+                if (mask[nb] === 0) continue;
+                visited[nb] = 1;
+                q.push(nb);
+            }
+        }
+
+        const circularity = calculateCircularity(count, perimeter);
+        if (count > largest.area && circularity > 0.8) {
+            largest = { area: count, cx: sumX / count, cy: sumY / count, perimeter };
+        }
+    }
+
+    return { cx: largest.cx, cy: largest.cy, area: largest.area };
+}
+
 
 /* ===================================================
    INIT
