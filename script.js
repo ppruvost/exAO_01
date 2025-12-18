@@ -46,19 +46,27 @@ document.getElementById('capture-bg').addEventListener('click', () => {
 
 // Bouton : Lancer l'enregistrement
 document.getElementById('start-recording').addEventListener('click', () => {
+    console.log("Bouton 'Lancer l'enregistrement' cliqué !");
     if (isRecording) {
         console.log("Un enregistrement est déjà en cours.");
         return;
     }
 
     if (!video.srcObject) {
+        console.error("video.srcObject n'est pas défini !");
         alert("La caméra n'est pas accessible. Veuillez d'abord autoriser l'accès à la caméra.");
         return;
     }
 
     recordedChunks = [];
     try {
-        mediaRecorder = new MediaRecorder(video.srcObject, { mimeType: 'video/webm' });
+        const options = { mimeType: 'video/webm;codecs=vp9' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            console.warn(`${options.mimeType} n'est pas supporté. Utilisation du type par défaut.`);
+            mediaRecorder = new MediaRecorder(video.srcObject);
+        } else {
+            mediaRecorder = new MediaRecorder(video.srcObject, options);
+        }
     } catch (err) {
         console.error("Erreur lors de la création de MediaRecorder :", err);
         alert("Impossible de démarrer l'enregistrement. Vérifiez que votre navigateur supporte MediaRecorder.");
@@ -75,24 +83,23 @@ document.getElementById('start-recording').addEventListener('click', () => {
         console.log("Enregistrement terminé. Traitement des données...");
         const blob = new Blob(recordedChunks, { type: 'video/webm' });
         console.log("Vidéo enregistrée :", blob);
-        // Vous pouvez ici traiter la vidéo enregistrée (blob)
     };
 
-    mediaRecorder.start(100); // Collecte des données toutes les 100 ms
+    mediaRecorder.start(100);
     isRecording = true;
-    console.log("Enregistrement démarré.");
+    console.log("Enregistrement démarré. isRecording =", isRecording);
 });
 
 // Bouton : Arrêter l'enregistrement
 document.getElementById('stop-recording').addEventListener('click', () => {
+    console.log("Bouton 'Arrêter l'enregistrement' cliqué !");
     if (!isRecording) {
         console.log("Aucun enregistrement en cours.");
         return;
     }
-
     mediaRecorder.stop();
     isRecording = false;
-    console.log("Enregistrement arrêté.");
+    console.log("Enregistrement arrêté. isRecording =", isRecording);
 });
 
 // Fonction : Calculer la luminosité
