@@ -1,7 +1,7 @@
 // Variables globales
 let video = document.getElementById('video');
 let canvas = document.getElementById('canvas');
-let context = canvas.getContext('2d');
+let context = canvas.getContext('2d', { willReadFrequently: true }); // Ajout de willReadFrequently
 let backgroundImage = null;
 let luxValue = document.getElementById('lux-value');
 let isRecording = false;
@@ -47,6 +47,7 @@ document.getElementById('capture-bg').addEventListener('click', () => {
 // Bouton : Lancer l'enregistrement
 document.getElementById('start-recording').addEventListener('click', () => {
     console.log("Bouton 'Lancer l'enregistrement' cliqué !");
+
     if (isRecording) {
         console.log("Un enregistrement est déjà en cours.");
         return;
@@ -83,6 +84,7 @@ document.getElementById('start-recording').addEventListener('click', () => {
         console.log("Enregistrement terminé. Traitement des données...");
         const blob = new Blob(recordedChunks, { type: 'video/webm' });
         console.log("Vidéo enregistrée :", blob);
+        isRecording = false; // Réinitialiser l'état d'enregistrement
     };
 
     mediaRecorder.start(100);
@@ -98,7 +100,6 @@ document.getElementById('stop-recording').addEventListener('click', () => {
         return;
     }
     mediaRecorder.stop();
-    isRecording = false;
     console.log("Enregistrement arrêté. isRecording =", isRecording);
 });
 
