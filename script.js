@@ -1,7 +1,7 @@
 // Variables globales
 let video = document.getElementById('video');
 let canvas = document.getElementById('canvas');
-let context = canvas.getContext('2d', { willReadFrequently: true }); // Ajout de willReadFrequently
+let context = canvas.getContext('2d', { willReadFrequently: true });
 let backgroundImage = null;
 let luxValue = document.getElementById('lux-value');
 let isRecording = false;
@@ -59,6 +59,9 @@ document.getElementById('start-recording').addEventListener('click', () => {
         return;
     }
 
+    // Masquer le canvas pendant l'enregistrement
+    canvas.style.display = 'none';
+
     recordedChunks = [];
     try {
         const options = { mimeType: 'video/webm;codecs=vp9' };
@@ -84,7 +87,8 @@ document.getElementById('start-recording').addEventListener('click', () => {
         console.log("Enregistrement terminé. Traitement des données...");
         const blob = new Blob(recordedChunks, { type: 'video/webm' });
         console.log("Vidéo enregistrée :", blob);
-        isRecording = false; // Réinitialiser l'état d'enregistrement
+        isRecording = false;
+        canvas.style.display = 'block'; // Réafficher le canvas après l'enregistrement
     };
 
     mediaRecorder.start(100);
