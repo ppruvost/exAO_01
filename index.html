@@ -4,16 +4,110 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Suivi d'Objet et Calculs Physiques</title>
-    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .lux-display {
+            font-size: 16px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #video {
+            width: 100%;
+            display: block;
+        }
+
+        .canvas-overlay, .axis-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 1px solid red;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .results {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+
+        .results p {
+            margin: 5px 0;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <div class="lux-display">Luminosité : <span id="lux-value">0</span> lux</div>
+        <div class="lux-display">
+            Luminosité : <span id="lux-value">0</span> lux
+        </div>
         <div class="video-container">
             <video id="video" autoplay muted></video>
             <canvas id="canvas" class="canvas-overlay"></canvas>
+            <!-- Canvas pour le repère 3D -->
+            <canvas id="3d-axis" class="axis-overlay"></canvas>
             <div class="crosshair" id="crosshair"></div>
-            <div class="horizontal-line" id="horizontal-line"></div>
         </div>
         <div class="controls">
             <button id="capture-bg">Capturer le fond</button>
@@ -22,7 +116,8 @@
         </div>
         <div class="results">
             <p>Angle : <span id="angle-value">0</span>°</p>
-            <p>Vitesse/Accélération : <span id="speed-value">0</span></p>
+            <p>Vitesse : <span id="speed-value">0</span> px/s</p>
+            <p>Position (X, Y, Z) : <span id="position-value">(0, 0, 0)</span></p>
             <p>Erreur absolue (e1) : <span id="error1-value">0</span></p>
             <p>Erreur relative (e2) : <span id="error2-value">0</span></p>
         </div>
