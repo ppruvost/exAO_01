@@ -38,7 +38,15 @@ video, canvas {
     top: 0;
     left: 0;
     z-index: 10;
-    display: none; /* Masquer le canvas par défaut */
+    display: none; /* Masqué par défaut */
+}
+
+.axis-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 12; /* Z-index entre le canvas principal et le crosshair */
+    pointer-events: none;
 }
 
 .crosshair {
@@ -50,16 +58,9 @@ video, canvas {
     pointer-events: none;
     z-index: 20;
     display: none;
-}
-
-.horizontal-line {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 2px;
-    background-color: lime;
-    z-index: 15;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
 }
 
 .controls {
