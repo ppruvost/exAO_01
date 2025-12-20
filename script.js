@@ -202,7 +202,7 @@ document.getElementById('start-recording').addEventListener('click', () => {
     };
 
     mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const blob = new Blob(recordChunks, { type: 'video/webm' });
         console.log("Vidéo enregistrée :", blob);
         isRecording = false;
     };
