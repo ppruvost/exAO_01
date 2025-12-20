@@ -12,6 +12,9 @@ let recordedChunks = [];
 let previousPosition = { x: 0, y: 0, z: 0 };
 let previousTime = 0;
 
+// Échelle : 1 pixel = 1 mm (ajustez selon vos besoins)
+const scale = 1;
+
 // Initialisation de la caméra
 navigator.mediaDevices.getUserMedia({ video: true })
     .then(stream => {
@@ -30,88 +33,69 @@ navigator.mediaDevices.getUserMedia({ video: true })
         alert("Impossible d'accéder à la caméra. Veuillez vérifier les permissions.");
     });
 
-// Fonction : Dessiner le repère 3D
+// Fonction : Dessiner le repère 3D en bas à gauche
 function draw3DAxis() {
     axisContext.clearRect(0, 0, axisCanvas.width, axisCanvas.height);
 
-    // Origine (centre du canvas)
-    const originX = axisCanvas.width / 2;
-    const originY = axisCanvas.height / 2;
-    const axisLength = 100;
+    // Origine (coin bas-gauche)
+    const originX = 50; // Marge à gauche
+    const originY = axisCanvas.height - 50; // Marge en bas
+    const axisLength = 150; // Longueur des axes en pixels (ajustez selon la taille de l'écran)
 
-    // Dessiner l'axe X (gauche/droite, rouge)
+    // Dessiner l'axe X (rouge, gauche → droite)
     axisContext.strokeStyle = 'red';
+    axisContext.lineWidth = 2;
     axisContext.beginPath();
-    axisContext.moveTo(originX - axisLength, originY);
+    axisContext.moveTo(originX, originY);
     axisContext.lineTo(originX + axisLength, originY);
     axisContext.stroke();
 
-    // Graduations X
-    for (let i = -axisLength; i <= axisLength; i += 20) {
+    // Graduations X (tous les 10 mm)
+    for (let i = 0; i <= axisLength; i += 10) {
         axisContext.fillStyle = 'red';
-        axisContext.fillRect(originX + i - 1, originY - 2, 2, 4);
+        axisContext.fillRect(originX + i, originY - 3, 1, 6);
+        axisContext.fillText((i / scale).toFixed(0), originX + i, originY - 8);
     }
-
-    // Légendes X
     axisContext.fillStyle = 'red';
-    axisContext.fillText('X (gauche)', originX - axisLength - 50, originY - 5);
-    axisContext.fillText('X (droite)', originX + axisLength + 10, originY - 5);
+    axisContext.fillText('X (mm)', originX + axisLength + 5, originY);
 
-    // Dessiner l'axe Y (avant/arrière, vert)
+    // Dessiner l'axe Y (vert, arrière → avant)
     axisContext.strokeStyle = 'green';
     axisContext.beginPath();
-    axisContext.moveTo(originX, originY - axisLength);
-    axisContext.lineTo(originX, originY + axisLength);
+    axisContext.moveTo(originX, originY);
+    axisContext.lineTo(originX - axisLength * Math.cos(Math.PI / 6), originY - axisLength * Math.sin(Math.PI / 6));
     axisContext.stroke();
 
-    // Graduations Y
-    for (let i = -axisLength; i <= axisLength; i += 20) {
+    // Graduations Y (tous les 10 mm)
+    for (let i = 0; i <= axisLength; i += 10) {
+        const x = originX - i * Math.cos(Math.PI / 6);
+        const y = originY - i * Math.sin(Math.PI / 6);
         axisContext.fillStyle = 'green';
-        axisContext.fillRect(originX - 2, originY + i - 1, 4, 2);
+        axisContext.fillRect(x - 1, y - 1, 2, 2);
+        axisContext.fillText((i / scale).toFixed(0), x - 10, y - 5);
     }
-
-    // Légendes Y
     axisContext.fillStyle = 'green';
-    axisContext.fillText('Y (avant)', originX + 10, originY - axisLength - 5);
-    axisContext.fillText('Y (arrière)', originX + 10, originY + axisLength + 15);
+    axisContext.fillText('Y (mm)', originX - axisLength * Math.cos(Math.PI / 6) - 15, originY - axisLength * Math.sin(Math.PI / 6) - 10);
 
-    // Dessiner l'axe Z (haut/bas, bleu)
+    // Dessiner l'axe Z (bleu, bas → haut)
     axisContext.strokeStyle = 'blue';
     axisContext.beginPath();
     axisContext.moveTo(originX, originY);
-    axisContext.lineTo(originX - axisLength * 0.7, originY - axisLength * 0.7); // Haut
+    axisContext.lineTo(originX, originY - axisLength);
     axisContext.stroke();
 
-    // Graduations Z (haut)
-    for (let i = 0; i <= axisLength; i += 20) {
-        const x = originX - i * 0.7;
-        const y = originY - i * 0.7;
+    // Graduations Z (tous les 10 mm)
+    for (let i = 0; i <= axisLength; i += 10) {
         axisContext.fillStyle = 'blue';
-        axisContext.fillRect(x - 1, y - 1, 2, 2);
+        axisContext.fillRect(originX - 3, originY - i, 6, 1);
+        axisContext.fillText((i / scale).toFixed(0), originX - 20, originY - i);
     }
-
-    // Légende Z (haut)
     axisContext.fillStyle = 'blue';
-    axisContext.fillText('Z (haut)', originX - axisLength * 0.7 - 10, originY - axisLength * 0.7 - 5);
+    axisContext.fillText('Z (mm)', originX - 30, originY - axisLength - 5);
 
-    // Dessiner l'axe Z (bas)
-    axisContext.strokeStyle = 'blue';
-    axisContext.beginPath();
-    axisContext.moveTo(originX, originY);
-    axisContext.lineTo(originX + axisLength * 0.7, originY + axisLength * 0.7); // Bas
-    axisContext.stroke();
-
-    // Graduations Z (bas)
-    for (let i = 0; i <= axisLength; i += 20) {
-        const x = originX + i * 0.7;
-        const y = originY + i * 0.7;
-        axisContext.fillStyle = 'blue';
-        axisContext.fillRect(x - 1, y - 1, 2, 2);
-    }
-
-    // Légende Z (bas)
-    axisContext.fillStyle = 'blue';
-    axisContext.fillText('Z (bas)', originX + axisLength * 0.7 + 5, originY + axisLength * 0.7 + 15);
+    // Origine
+    axisContext.fillStyle = 'black';
+    axisContext.fillText('O', originX - 10, originY + 15);
 }
 
 // Bouton : Capturer le fond
