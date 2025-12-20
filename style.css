@@ -1,3 +1,6 @@
+/* =====================================================
+   STYLE GLOBAL
+===================================================== */
 body {
     font-family: Arial, sans-serif;
     margin: 0;
@@ -5,21 +8,30 @@ body {
     background-color: #f0f0f0;
 }
 
+/* =====================================================
+   CONTENEUR PRINCIPAL
+===================================================== */
 .container {
-    max-width: 800px;
+    max-width: 900px;
     margin: 0 auto;
-    background-color: white;
+    background-color: #ffffff;
     padding: 20px;
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
+/* =====================================================
+   AFFICHAGE LUMINOSITÉ
+===================================================== */
 .lux-display {
     font-size: 16px;
     margin-bottom: 10px;
     text-align: center;
 }
 
+/* =====================================================
+   ZONE VIDÉO + CANVAS
+===================================================== */
 .video-container {
     position: relative;
     width: 100%;
@@ -30,12 +42,20 @@ body {
     overflow: hidden;
 }
 
+/* Vidéo */
 #video {
     width: 100%;
     display: block;
-    z-index: 1; /* Assurez-vous que la vidéo a un z-index inférieur aux autres éléments */
+    position: relative;
+    z-index: 1;
 }
 
+/* Canvas vidéo */
+canvas {
+    display: block;
+}
+
+/* Canvas superposé (analyse vidéo) */
 .canvas-overlay {
     position: absolute;
     top: 0;
@@ -46,6 +66,7 @@ body {
     z-index: 10;
 }
 
+/* Repère 3D */
 .axis-overlay {
     position: absolute;
     top: 0;
@@ -56,6 +77,9 @@ body {
     z-index: 11;
 }
 
+/* =====================================================
+   RÉTICULE
+===================================================== */
 .crosshair {
     position: absolute;
     top: 50%;
@@ -69,30 +93,37 @@ body {
     z-index: 20;
 }
 
+/* =====================================================
+   CHRONOMÈTRE
+===================================================== */
 .stopwatch {
     position: absolute;
     top: 10px;
     right: 10px;
     background-color: rgba(0, 0, 0, 0.7);
-    color: white;
+    color: #ffffff;
     padding: 5px 10px;
     border-radius: 5px;
     font-size: 16px;
-    z-index: 25;
     font-family: monospace;
+    z-index: 30;
 }
 
+/* =====================================================
+   BOUTONS DE CONTRÔLE
+===================================================== */
 .controls {
     display: flex;
     justify-content: center;
     gap: 10px;
     margin: 20px 0;
+    flex-wrap: wrap;
 }
 
 button {
     padding: 10px 15px;
     background-color: #4CAF50;
-    color: white;
+    color: #ffffff;
     border: none;
     border-radius: 5px;
     cursor: pointer;
@@ -103,22 +134,36 @@ button:hover {
     background-color: #45a049;
 }
 
+/* =====================================================
+   RÉSULTATS & ÉQUATION
+===================================================== */
 .results {
     margin-top: 20px;
-    padding: 10px;
+    padding: 15px;
     background-color: #f9f9f9;
     border-radius: 5px;
 }
 
 .results p {
-    margin: 5px 0;
+    margin: 6px 0;
 }
 
-/* Ajout pour améliorer la lisibilité des axes */
+/* Affichage équation du mouvement */
+pre {
+    margin-top: 10px;
+    background-color: #eeeeee;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+/* =====================================================
+   (OPTIONNEL) LABELS D'AXES FUTURS
+===================================================== */
 .axis-label {
     font-size: 12px;
-    font-family: Arial, sans-serif;
     font-weight: bold;
-    color: black;
-    text-shadow: 1px 1px 1px white;
+    color: #000000;
+    text-shadow: 1px 1px 1px #ffffff;
 }
