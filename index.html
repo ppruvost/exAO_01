@@ -106,12 +106,13 @@
             position: absolute;
             top: 10px;
             right: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: rgba(0, 0, 0, 0.7);
             color: white;
             padding: 5px 10px;
             border-radius: 5px;
             font-size: 16px;
-            z-index: 25;
+            z-index: 30;
+            font-family: monospace;
         }
     </style>
 </head>
@@ -125,7 +126,7 @@
             <canvas id="canvas" class="canvas-overlay"></canvas>
             <canvas id="3d-axis" class="axis-overlay"></canvas>
             <div class="crosshair" id="crosshair"></div>
-            <div class="stopwatch" id="stopwatch">00:00:00</div>
+            <div class="stopwatch" id="stopwatch">00:00:00.00</div>
         </div>
         <div class="controls">
             <button id="capture-bg">Capturer le fond</button>
