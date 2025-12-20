@@ -12,8 +12,44 @@ let recordedChunks = [];
 let previousPosition = { x: 0, y: 0, z: 0 };
 let previousTime = 0;
 
+// Variables pour le chronomètre
+let stopwatchInterval;
+let stopwatchStartTime;
+let stopwatchElement = document.getElementById('stopwatch');
+
 // Échelle : 1 unité = 1 mm
 const scale = 1;
+
+// Fonction pour formater le temps (ms → HH:MM:SS)
+function formatTime(ms) {
+    let seconds = Math.floor(ms / 1000);
+    let minutes = Math.floor(seconds / 60);
+    let hours = Math.floor(minutes / 60);
+
+    seconds = seconds % 60;
+    minutes = minutes % 60;
+
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Fonction pour démarrer le chronomètre
+function startStopwatch() {
+    stopwatchStartTime = Date.now();
+    stopwatchInterval = setInterval(() => {
+        const elapsedTime = Date.now() - stopwatchStartTime;
+        stopwatchElement.textContent = formatTime(elapsedTime);
+    }, 1000);
+}
+
+// Fonction pour arrêter le chronomètre
+function stopStopwatch() {
+    clearInterval(stopwatchInterval);
+}
+
+// Fonction pour réinitialiser le chronomètre
+function resetStopwatch() {
+    stopwatchElement.textContent = '00:00:00';
+}
 
 // Initialisation de la caméra
 navigator.mediaDevices.getUserMedia({ video: true })
@@ -174,10 +210,12 @@ document.getElementById('start-recording').addEventListener('click', () => {
         console.log("Vidéo enregistrée :", blob);
         isRecording = false;
         canvas.style.display = 'block';
+        stopStopwatch();
     };
 
     mediaRecorder.start(100);
     isRecording = true;
+    startStopwatch();
 });
 
 // Bouton : Arrêter l'enregistrement
