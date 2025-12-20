@@ -1,234 +1,252 @@
-// Variables globales
+/********************************************************
+ * VARIABLES GLOBALES
+ ********************************************************/
 let video = document.getElementById('video');
 let canvas = document.getElementById('canvas');
 let context = canvas.getContext('2d', { willReadFrequently: true });
+
 let axisCanvas = document.getElementById('3d-axis');
 let axisContext = axisCanvas.getContext('2d');
+
 let backgroundImage = null;
 let luxValue = document.getElementById('lux-value');
+
 let isRecording = false;
 let mediaRecorder;
 let recordedChunks = [];
-let previousPosition = { x: 0, y: 0, z: 0 };
-let previousTime = 0;
 
-// Variables pour le chronomètre
+// Chronomètre
 let stopwatchInterval;
 let stopwatchStartTime;
 let stopwatchElement = document.getElementById('stopwatch');
 
-// Fonction pour formater le temps (ms → HH:MM:SS.ss)
-function formatTime(ms) {
-    let centiseconds = Math.floor((ms % 1000) / 10);
-    let seconds = Math.floor(ms / 1000) % 60;
-    let minutes = Math.floor(ms / (1000 * 60)) % 60;
-    let hours = Math.floor(ms / (1000 * 60 * 60)) % 24;
+// Mouvement
+let motionDetected = false;
+let motionStartTime = 0;
+let motionEndTime = 0;
+let trajectory = [];
 
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
+let pixelThreshold = 30;
+let minMotionPixels = 500;
+
+
+/********************************************************
+ * CHRONOMÈTRE
+ ********************************************************/
+function formatTime(ms) {
+    let cs = Math.floor((ms % 1000) / 10);
+    let s = Math.floor(ms / 1000) % 60;
+    let m = Math.floor(ms / 60000) % 60;
+    let h = Math.floor(ms / 3600000);
+    return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${cs.toString().padStart(2,'0')}`;
 }
 
-// Fonction pour démarrer le chronomètre
 function startStopwatch() {
     stopwatchStartTime = Date.now();
     clearInterval(stopwatchInterval);
     stopwatchInterval = setInterval(() => {
-        const elapsedTime = Date.now() - stopwatchStartTime;
-        stopwatchElement.textContent = formatTime(elapsedTime);
+        stopwatchElement.textContent = formatTime(Date.now() - stopwatchStartTime);
     }, 10);
 }
 
-// Fonction pour arrêter le chronomètre
 function stopStopwatch() {
     clearInterval(stopwatchInterval);
 }
 
-// Fonction pour réinitialiser le chronomètre
 function resetStopwatch() {
     stopwatchElement.textContent = '00:00:00.00';
 }
 
-// Initialisation de la caméra
+
+/********************************************************
+ * INITIALISATION CAMÉRA
+ ********************************************************/
 navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => {
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            axisCanvas.width = video.videoWidth;
-            axisCanvas.height = video.videoHeight;
-            draw3DAxis();
-            console.log("Caméra prête, dimensions :", canvas.width, canvas.height);
-        };
-    })
-    .catch(err => {
-        console.error("Erreur d'accès à la caméra :", err);
-        alert("Impossible d'accéder à la caméra. Veuillez vérifier les permissions.");
-    });
-
-// Fonction : Dessiner le repère 3D
-function draw3DAxis() {
-    axisContext.clearRect(0, 0, axisCanvas.width, axisCanvas.height);
-
-    // Origine (coin bas-gauche)
-    const originX = 0;
-    const originY = axisCanvas.height;
-    const axisLengthX = axisCanvas.width;   // Longueur de l'axe X sur toute la largeur de l'écran
-    const axisLengthZ = axisCanvas.height;  // Longueur de l'axe Z sur toute la hauteur de l'écran
-    const axisLengthY = Math.min(axisCanvas.width, axisCanvas.height) * 0.7; // Longueur de l'axe Y
-
-    // Dessiner l'axe X (rouge, gauche → droite)
-    axisContext.strokeStyle = 'red';
-    axisContext.lineWidth = 2;
-    axisContext.beginPath();
-    axisContext.moveTo(originX, originY);
-    axisContext.lineTo(originX + axisLengthX, originY);
-    axisContext.stroke();
-
-    // Graduations X (tous les 10 mm, nombres tous les 50 mm)
-    for (let i = 0; i <= axisLengthX; i += 10) {
-        if (i % 50 === 0) {
-            axisContext.fillStyle = 'red';
-            axisContext.fillRect(originX + i, originY - 6, 2, 12);
-            axisContext.fillText((i / 10).toFixed(0), originX + i - 10, originY - 10);
-        } else {
-            axisContext.fillStyle = 'red';
-            axisContext.fillRect(originX + i, originY - 3, 1, 6);
-        }
-    }
-    axisContext.fillStyle = 'red';
-    axisContext.fillText('X (mm)', originX + axisLengthX - 30, originY - 20);
-
-    // Dessiner l'axe Y (vert, vers l'intérieur du repère XZ)
-    axisContext.strokeStyle = 'green';
-    axisContext.beginPath();
-    axisContext.moveTo(originX, originY);
-    axisContext.lineTo(originX + axisLengthY * Math.cos(Math.PI / 4), originY - axisLengthY * Math.sin(Math.PI / 4));
-    axisContext.stroke();
-
-    // Graduations Y (tous les 10 mm, nombres tous les 50 mm)
-    for (let i = 0; i <= axisLengthY; i += 10) {
-        const x = originX + i * Math.cos(Math.PI / 4);
-        const y = originY - i * Math.sin(Math.PI / 4);
-        if (i % 50 === 0) {
-            axisContext.fillStyle = 'green';
-            axisContext.fillRect(x - 1, y - 1, 2, 2);
-            axisContext.fillText((i / 10).toFixed(0), x + 5, y + 15);
-        } else {
-            axisContext.fillStyle = 'green';
-            axisContext.fillRect(x - 1, y - 1, 2, 2);
-        }
-    }
-    axisContext.fillStyle = 'green';
-    axisContext.fillText('Y (mm)', originX + axisLengthY * Math.cos(Math.PI / 4) + 10, originY - axisLengthY * Math.sin(Math.PI / 4) - 10);
-
-    // Dessiner l'axe Z (bleu, bas → haut)
-    axisContext.strokeStyle = 'blue';
-    axisContext.beginPath();
-    axisContext.moveTo(originX, originY);
-    axisContext.lineTo(originX, originY - axisLengthZ);
-    axisContext.stroke();
-
-    // Graduations Z (tous les 10 mm, nombres tous les 50 mm)
-    for (let i = 0; i <= axisLengthZ; i += 10) {
-        if (i % 50 === 0) {
-            axisContext.fillStyle = 'blue';
-            axisContext.fillRect(originX - 6, originY - i, 12, 2);
-            axisContext.fillText((i / 10).toFixed(0), originX - 30, originY - i + 5);
-        } else {
-            axisContext.fillStyle = 'blue';
-            axisContext.fillRect(originX - 3, originY - i, 6, 1);
-        }
-    }
-    axisContext.fillStyle = 'blue';
-    axisContext.fillText('Z (mm)', originX - 30, originY - axisLengthZ + 20);
-
-    // Origine
-    axisContext.fillStyle = 'black';
-    axisContext.fillText('O', originX + 10, originY - 10);
-}
-
-// Bouton : Capturer le fond
-document.getElementById('capture-bg').addEventListener('click', () => {
-    if (!video.srcObject) {
-        alert("La caméra n'est pas accessible. Veuillez d'abord autoriser l'accès à la caméra.");
-        return;
-    }
-
-    if (video.readyState < 2) {
-        alert("La vidéo n'est pas prête. Veuillez patienter.");
-        return;
-    }
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    backgroundImage = context.getImageData(0, 0, canvas.width, canvas.height);
-    const lux = calculateLux(backgroundImage);
-    luxValue.textContent = lux;
-    draw3DAxis();
-    console.log("Fond capturé avec succès.");
+.then(stream => {
+    video.srcObject = stream;
+    video.onloadedmetadata = () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        axisCanvas.width = video.videoWidth;
+        axisCanvas.height = video.videoHeight;
+        draw3DAxis();
+    };
+})
+.catch(err => {
+    console.error(err);
+    alert("Accès caméra refusé");
 });
 
-// Bouton : Lancer l'enregistrement
+
+/********************************************************
+ * REPÈRE 3D
+ ********************************************************/
+function draw3DAxis() {
+    axisContext.clearRect(0,0,axisCanvas.width,axisCanvas.height);
+
+    const OX = 0;
+    const OY = axisCanvas.height;
+
+    // X
+    axisContext.strokeStyle = 'red';
+    axisContext.beginPath();
+    axisContext.moveTo(OX,OY);
+    axisContext.lineTo(axisCanvas.width,OY);
+    axisContext.stroke();
+    axisContext.fillText('X', axisCanvas.width - 20, OY - 10);
+
+    // Z
+    axisContext.strokeStyle = 'blue';
+    axisContext.beginPath();
+    axisContext.moveTo(OX,OY);
+    axisContext.lineTo(OX,0);
+    axisContext.stroke();
+    axisContext.fillText('Z', 10, 20);
+
+    // Y (diagonal)
+    axisContext.strokeStyle = 'green';
+    axisContext.beginPath();
+    axisContext.moveTo(OX,OY);
+    axisContext.lineTo(axisCanvas.width*0.4, axisCanvas.height*0.6);
+    axisContext.stroke();
+    axisContext.fillText('Y', axisCanvas.width*0.4+10, axisCanvas.height*0.6);
+}
+
+
+/********************************************************
+ * CAPTURE DU FOND
+ ********************************************************/
+document.getElementById('capture-bg').addEventListener('click', () => {
+    context.drawImage(video,0,0,canvas.width,canvas.height);
+    backgroundImage = context.getImageData(0,0,canvas.width,canvas.height);
+    luxValue.textContent = calculateLux(backgroundImage);
+    draw3DAxis();
+});
+
+
+/********************************************************
+ * ENREGISTREMENT
+ ********************************************************/
 document.getElementById('start-recording').addEventListener('click', () => {
-    if (isRecording) {
-        console.log("Un enregistrement est déjà en cours.");
+    if (!backgroundImage) {
+        alert("Capture du fond requise");
         return;
     }
 
-    if (!video.srcObject) {
-        alert("La caméra n'est pas accessible. Veuillez d'abord autoriser l'accès à la caméra.");
-        return;
-    }
-
-    // Ne pas masquer le canvas, mais effacer le contenu du canvas principal
-    context.clearRect(0, 0, canvas.width, canvas.height);
-
+    trajectory = [];
+    motionDetected = false;
     recordedChunks = [];
     resetStopwatch();
 
-    try {
-        const options = { mimeType: 'video/webm;codecs=vp9' };
-        mediaRecorder = MediaRecorder.isTypeSupported(options.mimeType)
-            ? new MediaRecorder(video.srcObject, options)
-            : new MediaRecorder(video.srcObject);
-    } catch (err) {
-        console.error("Erreur lors de la création de MediaRecorder :", err);
-        alert("Impossible de démarrer l'enregistrement.");
-        return;
-    }
+    mediaRecorder = new MediaRecorder(video.srcObject);
+    mediaRecorder.ondataavailable = e => e.data.size && recordedChunks.push(e.data);
+    mediaRecorder.start();
 
-    mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) recordedChunks.push(event.data);
-    };
-
-    mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunks, { type: 'video/webm' });
-        console.log("Vidéo enregistrée :", blob);
-        isRecording = false;
-    };
-
-    mediaRecorder.start(100);
     isRecording = true;
-    startStopwatch(); // Démarrer le chronomètre
+    startStopwatch();
+    motionLoop();
 });
 
-// Bouton : Arrêter l'enregistrement
 document.getElementById('stop-recording').addEventListener('click', () => {
     if (!isRecording) return;
+
+    isRecording = false;
     mediaRecorder.stop();
-    stopStopwatch(); // Arrêter le chronomètre
+    stopStopwatch();
+
+    if (trajectory.length > 1) {
+        motionEndTime = Date.now();
+        computeMotionResults();
+    }
 });
 
-// Fonction : Calculer la luminosité
+
+/********************************************************
+ * DÉTECTION DE MOUVEMENT
+ ********************************************************/
+function detectMotion() {
+    if (!isRecording) return;
+
+    context.drawImage(video,0,0,canvas.width,canvas.height);
+    const frame = context.getImageData(0,0,canvas.width,canvas.height);
+
+    let count = 0, sx = 0, sy = 0;
+
+    for (let i=0; i<frame.data.length; i+=4) {
+        const diff =
+            Math.abs(frame.data[i] - backgroundImage.data[i]) +
+            Math.abs(frame.data[i+1] - backgroundImage.data[i+1]) +
+            Math.abs(frame.data[i+2] - backgroundImage.data[i+2]);
+
+        if (diff > pixelThreshold) {
+            const p = i / 4;
+            const x = p % canvas.width;
+            const y = Math.floor(p / canvas.width);
+            sx += x;
+            sy += y;
+            count++;
+        }
+    }
+
+    if (count > minMotionPixels) {
+        const cx = sx / count;
+        const cy = sy / count;
+
+        if (!motionDetected) {
+            motionDetected = true;
+            motionStartTime = Date.now();
+        }
+
+        trajectory.push({
+            x: cx,
+            y: 0,
+            z: canvas.height - cy,
+            t: (Date.now() - motionStartTime) / 1000
+        });
+    }
+}
+
+function motionLoop() {
+    detectMotion();
+    if (isRecording) requestAnimationFrame(motionLoop);
+}
+
+
+/********************************************************
+ * CALCULS PHYSIQUES
+ ********************************************************/
+function computeMotionResults() {
+    const p0 = trajectory[0];
+    const p1 = trajectory[trajectory.length - 1];
+
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const dz = p1.z - p0.z;
+
+    const angleXZ = Math.atan2(dz, dx) * 180 / Math.PI;
+    const dt = (motionEndTime - motionStartTime) / 1000;
+
+    const vx = dx / dt;
+    const vy = dy / dt;
+    const vz = dz / dt;
+
+    console.log("Angle XZ :", angleXZ.toFixed(2), "°");
+    console.log("Équation du mouvement :");
+    console.log(`x(t) = ${vx.toFixed(2)} t`);
+    console.log(`y(t) = ${vy.toFixed(2)} t`);
+    console.log(`z(t) = ${vz.toFixed(2)} t`);
+}
+
+
+/********************************************************
+ * LUMINOSITÉ
+ ********************************************************/
 function calculateLux(imageData) {
     let sum = 0;
-    for (let i = 0; i < imageData.data.length; i += 4) {
-        const r = imageData.data[i];
-        const g = imageData.data[i + 1];
-        const b = imageData.data[i + 2];
-        const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        sum += luminance;
+    for (let i=0;i<imageData.data.length;i+=4) {
+        sum += 0.2126*imageData.data[i]
+             + 0.7152*imageData.data[i+1]
+             + 0.0722*imageData.data[i+2];
     }
-    return (sum / (imageData.data.length / 4)).toFixed(2);
+    return (sum / (imageData.data.length/4)).toFixed(2);
 }
