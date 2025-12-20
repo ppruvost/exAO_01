@@ -36,37 +36,22 @@ body {
     position: relative;
     width: 100%;
     max-width: 640px;
-    margin: 0 auto;
+    margin: 0 auto 20px;
     border: 1px solid #ccc;
     border-radius: 5px;
     overflow: hidden;
+    background-color: #000; /* Fond noir pour mieux voir la vidéo */
 }
 
 /* Vidéo */
 #video {
     width: 100%;
     display: block;
-    position: relative;
-    z-index: 1;
-}
-
-/* Canvas vidéo */
-canvas {
-    display: block;
+    background-color: #000;
 }
 
 /* Canvas superposé (analyse vidéo) */
-.canvas-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 10;
-}
-
-/* Repère 3D */
+.canvas-overlay,
 .axis-overlay {
     position: absolute;
     top: 0;
@@ -74,6 +59,13 @@ canvas {
     width: 100%;
     height: 100%;
     pointer-events: none;
+}
+
+.canvas-overlay {
+    z-index: 10;
+}
+
+.axis-overlay {
     z-index: 11;
 }
 
@@ -116,7 +108,7 @@ canvas {
     display: flex;
     justify-content: center;
     gap: 10px;
-    margin: 20px 0;
+    margin: 20px auto;
     flex-wrap: wrap;
 }
 
@@ -128,6 +120,7 @@ button {
     border-radius: 5px;
     cursor: pointer;
     font-size: 14px;
+    transition: background-color 0.3s;
 }
 
 button:hover {
@@ -138,49 +131,43 @@ button:hover {
    RÉSULTATS & ÉQUATION
 ===================================================== */
 .results {
-    margin-top: 20px;
+    margin: 20px auto;
     padding: 15px;
     background-color: #f9f9f9;
     border-radius: 5px;
+    max-width: 800px;
 }
 
 .results p {
-    margin: 6px 0;
+    margin: 8px 0;
+    font-size: 14px;
 }
 
-/* Affichage équation du mouvement */
-pre {
+#equation {
     margin-top: 10px;
     background-color: #eeeeee;
     padding: 10px;
     border-radius: 5px;
     font-family: monospace;
     white-space: pre-wrap;
-}
-
-/* =====================================================
-   (OPTIONNEL) LABELS D'AXES FUTURS
-===================================================== */
-.axis-label {
-    font-size: 12px;
-    font-weight: bold;
-    color: #000000;
-    text-shadow: 1px 1px 1px #ffffff;
+    font-size: 13px;
 }
 
 /* =====================================================
    GRAPHES
 ===================================================== */
-
 .graphs {
     display: flex;
     justify-content: space-between;
     gap: 10px;
-    margin-top: 15px;
+    margin: 20px auto;
+    max-width: 800px;
 }
 
 .graphs canvas {
     background: #ffffff;
     border: 1px solid #ccc;
     border-radius: 5px;
+    width: 100%;
+    max-width: 280px;
 }
