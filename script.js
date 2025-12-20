@@ -22,7 +22,6 @@ const equationEl = document.getElementById("equation");
 let backgroundFrame = null;
 let recording = false;
 let trajectory = [];
-
 let startTime = null;
 let animationId = null;
 
@@ -34,7 +33,8 @@ navigator.mediaDevices.getUserMedia({ video: true })
         video.srcObject = stream;
     })
     .catch(err => {
-        alert("Erreur webcam : " + err);
+        alert("Erreur d'accès à la webcam : " + err.message);
+        console.error("Erreur webcam :", err);
     });
 
 video.addEventListener("loadedmetadata", () => {
@@ -55,7 +55,7 @@ document.getElementById("capture-bg").onclick = () => {
  *********************************************************/
 document.getElementById("start-recording").onclick = () => {
     if (!backgroundFrame) {
-        alert("Capture le fond d'abord");
+        alert("Veuillez d'abord capturer le fond.");
         return;
     }
     trajectory = [];
@@ -66,7 +66,10 @@ document.getElementById("start-recording").onclick = () => {
 
 document.getElementById("stop-recording").onclick = () => {
     recording = false;
-    cancelAnimationFrame(animationId);
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
 };
 
 /*********************************************************
@@ -125,7 +128,7 @@ function processFrame(timestamp) {
 }
 
 /*********************************************************
- * CHRONO
+ * CHRONOMÈTRE
  *********************************************************/
 function updateStopwatch(t) {
     const ms = Math.floor((t % 1) * 100);
@@ -141,16 +144,25 @@ function updateStopwatch(t) {
 function drawAxes() {
     axisCtx.clearRect(0, 0, axisCanvas.width, axisCanvas.height);
 
-    axisCtx.strokeStyle = "blue";
+    // Axe X (rouge)
+    axisCtx.strokeStyle = "red";
     axisCtx.beginPath();
-    axisCtx.moveTo(0, axisCanvas.height);
-    axisCtx.lineTo(150, axisCanvas.height);
+    axisCtx.moveTo(0, axisCanvas.height / 2);
+    axisCtx.lineTo(axisCanvas.width, axisCanvas.height / 2);
     axisCtx.stroke();
 
+    // Axe Y (vert)
     axisCtx.strokeStyle = "green";
     axisCtx.beginPath();
-    axisCtx.moveTo(0, axisCanvas.height);
-    axisCtx.lineTo(0, axisCanvas.height - 150);
+    axisCtx.moveTo(axisCanvas.width / 2, 0);
+    axisCtx.lineTo(axisCanvas.width / 2, axisCanvas.height);
+    axisCtx.stroke();
+
+    // Axe Z (bleu)
+    axisCtx.strokeStyle = "blue";
+    axisCtx.beginPath();
+    axisCtx.moveTo(0, 0);
+    axisCtx.lineTo(axisCanvas.width, axisCanvas.height);
     axisCtx.stroke();
 }
 
@@ -160,7 +172,10 @@ function drawAxes() {
 document.getElementById("calculate").onclick = computeMotionResults;
 
 function computeMotionResults() {
-    if (trajectory.length < 2) return;
+    if (trajectory.length < 2) {
+        alert("Pas assez de données pour calculer.");
+        return;
+    }
 
     const p0 = trajectory[0];
     const p1 = trajectory[trajectory.length - 1];
@@ -180,7 +195,7 @@ function computeMotionResults() {
     error1El.textContent = "0";
     error2El.textContent = "0";
 
-    // Équations
+    // Équations du mouvement
     const ax = dx / dt;
     const ay = dy / dt;
     const az = dz / dt;
@@ -202,9 +217,9 @@ Vitesse = ${speed.toFixed(2)} px/s`;
  * GRAPHIQUES
  *********************************************************/
 function drawAllGraphs() {
-    drawGraph("graph-x", trajectory.map(p => ({ t: p.t, v: p.x }), "x(t)", "red");
-    drawGraph("graph-y", trajectory.map(p => ({ t: p.t, v: p.y }), "y(t)", "green");
-    drawGraph("graph-z", trajectory.map(p => ({ t: p.t, v: p.z }), "z(t)", "blue");
+    drawGraph("graph-x", trajectory.map(p => ({ t: p.t, v: p.x })), "x(t)", "red");
+    drawGraph("graph-y", trajectory.map(p => ({ t: p.t, v: p.y })), "y(t)", "green");
+    drawGraph("graph-z", trajectory.map(p => ({ t: p.t, v: p.z })), "z(t)", "blue");
 }
 
 function drawGraph(id, data, label, color) {
@@ -216,12 +231,16 @@ function drawGraph(id, data, label, color) {
     const w = c.width - 2 * pad;
     const h = c.height - 2 * pad;
 
+    // Axes
     g.strokeStyle = "#000";
     g.beginPath();
     g.moveTo(pad, pad);
     g.lineTo(pad, pad + h);
     g.lineTo(pad + w, pad + h);
     g.stroke();
+
+    // Données
+    if (data.length === 0) return;
 
     const tMin = Math.min(...data.map(p => p.t));
     const tMax = Math.max(...data.map(p => p.t));
@@ -233,10 +252,12 @@ function drawGraph(id, data, label, color) {
     data.forEach((p, i) => {
         const x = pad + ((p.t - tMin) / (tMax - tMin)) * w;
         const y = pad + h - ((p.v - vMin) / (vMax - vMin || 1)) * h;
-        i === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+        if (i === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
     });
     g.stroke();
 
+    // Légende
     g.fillStyle = "#000";
     g.fillText(label, pad + 5, pad - 8);
 }
