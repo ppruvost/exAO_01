@@ -33,6 +33,7 @@ body {
 #video {
     width: 100%;
     display: block;
+    z-index: 1; /* Assurez-vous que la vidéo a un z-index inférieur aux autres éléments */
 }
 
 .canvas-overlay {
@@ -66,6 +67,19 @@ body {
     border-radius: 50%;
     pointer-events: none;
     z-index: 20;
+}
+
+.stopwatch {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 16px;
+    z-index: 25;
+    font-family: monospace;
 }
 
 .controls {
