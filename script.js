@@ -161,8 +161,6 @@ document.getElementById('capture-bg').addEventListener('click', () => {
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    axisCanvas.width = video.videoWidth;
-    axisCanvas.height = video.videoHeight;
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     backgroundImage = context.getImageData(0, 0, canvas.width, canvas.height);
     const lux = calculateLux(backgroundImage);
@@ -182,6 +180,9 @@ document.getElementById('start-recording').addEventListener('click', () => {
         alert("La caméra n'est pas accessible. Veuillez d'abord autoriser l'accès à la caméra.");
         return;
     }
+
+    // Ne pas masquer le canvas, mais effacer le contenu du canvas principal
+    context.clearRect(0, 0, canvas.width, canvas.height);
 
     recordedChunks = [];
     resetStopwatch();
