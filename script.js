@@ -199,6 +199,26 @@ function computeErrors(pN, dx, dy) {
 }
 
 /***********************
+ * RÉGRESSION LINÉAIRE
+ ***********************/
+function linearRegression(data) {
+  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  const n = data.length;
+
+  for (const point of data) {
+    sumX += point.t;
+    sumY += point.v;
+    sumXY += point.t * point.v;
+    sumX2 += point.t * point.t;
+  }
+
+  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+
+  return { slope, intercept };
+}
+
+/***********************
  * CALCULS PHYSIQUES
  ***********************/
 document.getElementById("calculate").onclick = computeResults;
@@ -211,21 +231,35 @@ function computeResults() {
 
   // Calcul des vitesses et accélérations
   const velocities = [];
-  const accelerations = [];
-
   for (let i = 1; i < trajectory.length; i++) {
     const dt = trajectory[i].t - trajectory[i-1].t;
     const dx = (trajectory[i].x - trajectory[i-1].x) * SCALE;
     const dy = (trajectory[i].y - trajectory[i-1].y) * SCALE;
-
     const v = Math.sqrt(dx*dx + dy*dy) / dt;
     velocities.push({ t: trajectory[i].t, v });
+  }
 
-    if (i > 1) {
-      const dv = velocities[i-1].v - velocities[i-2].v;
-      const da = dv / (trajectory[i].t - trajectory[i-1].t);
-      accelerations.push({ t: trajectory[i].t, a: da });
-    }
+  // Régression linéaire sur les vitesses
+  const { slope, intercept } = linearRegression(velocities);
+
+  // Générer des points supplémentaires pour une courbe lissée
+  const smoothedVelocities = [];
+  const tMin = Math.min(...velocities.map(p => p.t));
+  const tMax = Math.max(...velocities.map(p => p.t));
+  const step = (tMax - tMin) / 50; // 50 points pour une courbe lisse
+
+  for (let t = tMin; t <= tMax; t += step) {
+    const v = slope * t + intercept;
+    smoothedVelocities.push({ t, v });
+  }
+
+  // Calcul des accélérations
+  const accelerations = [];
+  for (let i = 1; i < velocities.length; i++) {
+    const dt = velocities[i].t - velocities[i-1].t;
+    const dv = velocities[i].v - velocities[i-1].v;
+    const a = dv / dt;
+    accelerations.push({ t: velocities[i].t, a });
   }
 
   // Position finale
@@ -260,15 +294,17 @@ z(t) = ${z0.toFixed(2)} - 0.5 * ${g} * t²
 
 Angle = ${angle.toFixed(2)} °
 Vitesse moyenne = ${speed.toFixed(3)} m/s
-Position finale = (${dx.toFixed(2)}, ${dy.toFixed(2)}, ${zt.toFixed(2)}) m`;
+Position finale = (${dx.toFixed(2)}, ${dy.toFixed(2)}, ${zt.toFixed(2)}) m
+Régression v(t) = ${slope.toFixed(4)} t + ${intercept.toFixed(4)}`;
 
-  drawAllGraphs(velocities, accelerations);
+  // Tracer les graphiques
+  drawAllGraphs(velocities, accelerations, smoothedVelocities);
 }
 
 /***********************
  * GRAPHIQUES
  ***********************/
-function drawAllGraphs(velocities, accelerations) {
+function drawAllGraphs(velocities, accelerations, smoothedVelocities) {
   const g = 9.81;
   const z0 = 2.0;
 
@@ -285,8 +321,8 @@ function drawAllGraphs(velocities, accelerations) {
   });
   drawGraph("graph-z", zData, "z(t) m");
 
-  // Graphique v(t)
-  drawGraph("graph-v", velocities, "v(t) m/s");
+  // Graphique v(t) avec données brutes et lissées
+  drawGraphWithSmoothed("graph-v", velocities, smoothedVelocities, "v(t) m/s");
 
   // Graphique a(t)
   drawGraph("graph-a", accelerations, "a(t) m/s²");
@@ -324,6 +360,63 @@ function drawGraph(id, data, label) {
         tension: 0.1,
         fill: false
       }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Temps (s)'
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: label
+          }
+        }
+      }
+    }
+  });
+}
+
+function drawGraphWithSmoothed(id, rawData, smoothedData, label) {
+  const ctx = document.getElementById(id).getContext('2d');
+
+  // Détruire le graphique précédent s'il existe
+  if (myCharts[id]) {
+    myCharts[id].destroy();
+  }
+
+  if (rawData.length < 2) {
+    const c = document.getElementById(id);
+    const g = c.getContext("2d");
+    g.clearRect(0, 0, c.width, c.height);
+    g.fillText("Données insuffisantes", 20, 20);
+    return;
+  }
+
+  // Créer le graphique avec les données brutes et lissées
+  myCharts[id] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Vitesse brute',
+          data: rawData.map(p => ({ x: p.t, y: p.v })),
+          borderColor: 'rgb(255, 99, 132)',
+          tension: 0.1,
+          fill: false
+        },
+        {
+          label: 'Vitesse lissée',
+          data: smoothedData.map(p => ({ x: p.t, y: p.v })),
+          borderColor: 'rgb(75, 192, 192)',
+          tension: 0.4,
+          fill: false
+        }
+      ]
     },
     options: {
       responsive: true,
