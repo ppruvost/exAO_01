@@ -40,7 +40,6 @@ navigator.mediaDevices.getUserMedia({ video: true })
     video.srcObject = stream;
     video.onloadedmetadata = () => {
       video.play();
-      // Définir la taille des canvases dès que la vidéo est chargée
       canvas.width = axisCanvas.width = video.videoWidth;
       canvas.height = axisCanvas.height = video.videoHeight;
     };
@@ -139,10 +138,30 @@ function processFrame(timestamp) {
 function drawAxes() {
   axisCtx.clearRect(0, 0, axisCanvas.width, axisCanvas.height);
   axisCtx.strokeStyle = "red";
+
+  // Axe X (horizontale)
   axisCtx.beginPath();
   axisCtx.moveTo(0, axisCanvas.height / 2);
   axisCtx.lineTo(axisCanvas.width, axisCanvas.height / 2);
   axisCtx.stroke();
+
+  // Axe Y (profondeur, perpendiculaire à X)
+  axisCtx.beginPath();
+  axisCtx.moveTo(axisCanvas.width / 2, 0);
+  axisCtx.lineTo(axisCanvas.width / 2, axisCanvas.height);
+  axisCtx.stroke();
+
+  // Axe Z (hauteur, en diagonale pour la visualisation)
+  axisCtx.beginPath();
+  axisCtx.moveTo(0, axisCanvas.height);
+  axisCtx.lineTo(axisCanvas.width, 0);
+  axisCtx.stroke();
+
+  // Légendes des axes
+  axisCtx.fillStyle = "red";
+  axisCtx.fillText("x", axisCanvas.width - 10, axisCanvas.height / 2 - 5);
+  axisCtx.fillText("y", axisCanvas.width / 2 + 5, 15);
+  axisCtx.fillText("z", axisCanvas.width - 10, 15);
 }
 
 /***********************
@@ -157,6 +176,34 @@ function updateStopwatch(t) {
 }
 
 /***********************
+ * CALCUL DES ERREURS
+ ***********************/
+function computeErrors(pN, dt, dx, dy) {
+  // Valeurs théoriques simulées (exemple : mouvement uniforme)
+  const xTheorique = 0.1 + 0.2 * pN.t; // Exemple : x(t) = 0.1 + 0.2*t
+  const yTheorique = 0.05 + 0.1 * pN.t; // Exemple : y(t) = 0.05 + 0.1*t
+
+  // Valeurs mesurées
+  const xMesure = dx;
+  const yMesure = dy;
+
+  // Erreurs absolues
+  const erreurAbsX = Math.abs(xMesure - xTheorique);
+  const erreurAbsY = Math.abs(yMesure - yTheorique);
+
+  // Erreurs relatives (en %)
+  const erreurRelX = (erreurAbsX / xTheorique) * 100;
+  const erreurRelY = (erreurAbsY / yTheorique) * 100;
+
+  return {
+    erreurAbsX: erreurAbsX.toFixed(4),
+    erreurAbsY: erreurAbsY.toFixed(4),
+    erreurRelX: erreurRelX.toFixed(2),
+    erreurRelY: erreurRelY.toFixed(2),
+  };
+}
+
+/***********************
  * CALCULS PHYSIQUES
  ***********************/
 document.getElementById("calculate").onclick = computeResults;
@@ -167,64 +214,105 @@ function computeResults() {
     return;
   }
 
+  // Calcul des vitesses et accélérations
+  const velocities = [];
+  const accelerations = [];
+
+  for (let i = 1; i < trajectory.length; i++) {
+    const dt = trajectory[i].t - trajectory[i-1].t;
+    const dx = (trajectory[i].x - trajectory[i-1].x) * SCALE;
+    const dy = (trajectory[i].y - trajectory[i-1].y) * SCALE;
+
+    const v = Math.sqrt(dx*dx + dy*dy) / dt;
+    velocities.push({ t: trajectory[i].t, v });
+
+    if (i > 1) {
+      const dv = velocities[i-1].v - velocities[i-2].v;
+      const da = dv / (trajectory[i].t - trajectory[i-1].t);
+      accelerations.push({ t: trajectory[i].t, a: da });
+    }
+  }
+
+  // Position finale
   const p0 = trajectory[0];
-  const pN = trajectory.at(-1);
+  const pN = trajectory[trajectory.length - 1];
   const dt = pN.t - p0.t;
 
   const dx = (pN.x - p0.x) * SCALE;
   const dy = (pN.y - p0.y) * SCALE;
+
+  // Simulation de z(t) : hauteur (exemple : chute libre)
+  const g = 9.81;
+  const z0 = 2.0;
+  const zt = z0 - 0.5 * g * pN.t * pN.t;
+
+  // Calcul des erreurs
+  const { erreurAbsX, erreurAbsY, erreurRelX, erreurRelY } = computeErrors(pN, dt, dx, dy);
 
   const speed = Math.sqrt(dx*dx + dy*dy) / dt;
   const angle = Math.atan2(dy, dx) * 180 / Math.PI;
 
   angleEl.textContent = angle.toFixed(2);
   speedEl.textContent = speed.toFixed(3);
-  positionEl.textContent = `(${dx.toFixed(2)} , ${dy.toFixed(2)}) m`;
-  error1El.textContent = "—";
-  error2El.textContent = "—";
+  positionEl.textContent = `(${dx.toFixed(2)} , ${dy.toFixed(2)} , ${zt.toFixed(2)}) m`;
+  error1El.textContent = `Erreur absolue (x) = ${erreurAbsX} m, (y) = ${erreurAbsY} m`;
+  error2El.textContent = `Erreur relative (x) = ${erreurRelX}%, (y) = ${erreurRelY}%`;
 
   equationEl.textContent =
 `x(t) = ${(p0.x*SCALE).toFixed(2)} + ${(dx/dt).toFixed(2)} t
 y(t) = ${(p0.y*SCALE).toFixed(2)} + ${(dy/dt).toFixed(2)} t
+z(t) = ${z0.toFixed(2)} - 0.5 * ${g} * t²
 
 Angle = ${angle.toFixed(2)} °
-Vitesse moyenne = ${speed.toFixed(3)} m/s`;
+Vitesse moyenne = ${speed.toFixed(3)} m/s
+Position finale = (${dx.toFixed(2)}, ${dy.toFixed(2)}, ${zt.toFixed(2)}) m`;
 
-  drawAllGraphs();
+  drawAllGraphs(velocities, accelerations);
 }
 
 /***********************
  * GRAPHIQUES
  ***********************/
-function drawAllGraphs() {
-  drawGraph("graph-x", trajectory.map(p => ({t:p.t, v:p.x*SCALE})), "x(t) m");
-  drawGraph("graph-y", trajectory.map(p => ({t:p.t, v:p.y*SCALE})), "y(t) m");
+function drawAllGraphs(velocities, accelerations) {
+  drawGraph("graph-x", trajectory.map(p => ({t: p.t, v: p.x * SCALE})), "x(t) m");
+  drawGraph("graph-y", trajectory.map(p => ({t: p.t, v: p.y * SCALE})), "y(t) m");
+
+  // Génère des données pour z(t)
+  const zData = trajectory.map(p => {
+    const z = z0 - 0.5 * g * p.t * p.t;
+    return { t: p.t, v: z };
+  });
+  drawGraph("graph-z", zData, "z(t) m");
+
+  drawGraph("graph-v", velocities, "v(t) m/s");
+  drawGraph("graph-a", accelerations, "a(t) m/s²");
 }
 
 function drawGraph(id, data, label) {
   const c = document.getElementById(id);
   const g = c.getContext("2d");
-  g.clearRect(0,0,c.width,c.height);
+  g.clearRect(0, 0, c.width, c.height);
 
   if (data.length < 2) return;
 
   const pad = 30;
-  const w = c.width - 2*pad;
-  const h = c.height - 2*pad;
+  const w = c.width - 2 * pad;
+  const h = c.height - 2 * pad;
 
   const tMin = data[0].t;
-  const tMax = data.at(-1).t;
-  const vMin = Math.min(...data.map(p=>p.v));
-  const vMax = Math.max(...data.map(p=>p.v));
+  const tMax = data[data.length - 1].t;
+  const vMin = Math.min(...data.map(p => p.v));
+  const vMax = Math.max(...data.map(p => p.v));
 
-  g.strokeRect(pad,pad,w,h);
+  g.strokeRect(pad, pad, w, h);
 
   g.beginPath();
-  data.forEach((p,i)=>{
-    const x = pad + ((p.t-tMin)/(tMax-tMin))*w;
-    const y = pad + h - ((p.v-vMin)/(vMax-vMin||1))*h;
-    if(i===0) g.moveTo(x,y); else g.lineTo(x,y);
+  data.forEach((p, i) => {
+    const x = pad + ((p.t - tMin) / (tMax - tMin)) * w;
+    const y = pad + h - ((p.v - vMin) / (vMax - vMin || 1)) * h;
+    if (i === 0) g.moveTo(x, y);
+    else g.lineTo(x, y);
   });
   g.stroke();
-  g.fillText(label,pad+5,pad-8);
+  g.fillText(label, pad + 5, pad - 8);
 }
