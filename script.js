@@ -36,20 +36,28 @@ let animationId = null;
  * WEBCAM
  ***********************/
 navigator.mediaDevices.getUserMedia({ video: true })
-.then(stream => {
-  video.srcObject = stream;
-  video.onloadedmetadata = () => {
-    video.play();
-    canvas.width = axisCanvas.width = video.videoWidth;
-    canvas.height = axisCanvas.height = video.videoHeight;
-  };
-})
-.catch(err => alert("Erreur webcam : " + err.message));
+  .then(stream => {
+    video.srcObject = stream;
+    video.onloadedmetadata = () => {
+      video.play();
+      // Définir la taille des canvases dès que la vidéo est chargée
+      canvas.width = axisCanvas.width = video.videoWidth;
+      canvas.height = axisCanvas.height = video.videoHeight;
+    };
+  })
+  .catch(err => {
+    alert("Erreur webcam : " + err.message);
+    console.error("Erreur webcam :", err);
+  });
 
 /***********************
  * CAPTURE FOND
  ***********************/
 document.getElementById("capture-bg").onclick = () => {
+  if (video.videoWidth === 0) {
+    alert("La vidéo n'est pas prête. Veuillez patienter.");
+    return;
+  }
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
   backgroundFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 };
@@ -58,7 +66,10 @@ document.getElementById("capture-bg").onclick = () => {
  * ENREGISTREMENT
  ***********************/
 document.getElementById("start-recording").onclick = () => {
-  if (!backgroundFrame) return alert("Capturer le fond d'abord");
+  if (!backgroundFrame) {
+    alert("Capturer le fond d'abord");
+    return;
+  }
   trajectory = [];
   recording = true;
   startTime = performance.now();
@@ -151,7 +162,10 @@ function updateStopwatch(t) {
 document.getElementById("calculate").onclick = computeResults;
 
 function computeResults() {
-  if (trajectory.length < 5) return alert("Pas assez de données");
+  if (trajectory.length < 5) {
+    alert("Pas assez de données");
+    return;
+  }
 
   const p0 = trajectory[0];
   const pN = trajectory.at(-1);
@@ -183,8 +197,8 @@ Vitesse moyenne = ${speed.toFixed(3)} m/s`;
  * GRAPHIQUES
  ***********************/
 function drawAllGraphs() {
-  drawGraph("graph-x", trajectory.map(p => ({t:p.t, v:p.x*SCALE}), "x(t) m");
-  drawGraph("graph-y", trajectory.map(p => ({t:p.t, v:p.y*SCALE}), "y(t) m");
+  drawGraph("graph-x", trajectory.map(p => ({t:p.t, v:p.x*SCALE})), "x(t) m");
+  drawGraph("graph-y", trajectory.map(p => ({t:p.t, v:p.y*SCALE})), "y(t) m");
 }
 
 function drawGraph(id, data, label) {
