@@ -1,4 +1,9 @@
 /*********************************************************
+ * PARAMÈTRES
+ *********************************************************/
+const SCALE = 0.002; // mètre par pixel (À ÉTALONNER)
+
+/*********************************************************
  * VARIABLES GLOBALES
  *********************************************************/
 const video = document.getElementById("video");
@@ -26,16 +31,11 @@ let startTime = null;
 let animationId = null;
 
 /*********************************************************
- * ACCÈS WEBCAM
+ * WEBCAM
  *********************************************************/
 navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => {
-        video.srcObject = stream;
-    })
-    .catch(err => {
-        alert("Erreur d'accès à la webcam : " + err.message);
-        console.error("Erreur webcam :", err);
-    });
+    .then(stream => video.srcObject = stream)
+    .catch(console.error);
 
 video.addEventListener("loadedmetadata", () => {
     canvas.width = axisCanvas.width = video.videoWidth;
@@ -54,22 +54,16 @@ document.getElementById("capture-bg").onclick = () => {
  * ENREGISTREMENT
  *********************************************************/
 document.getElementById("start-recording").onclick = () => {
-    if (!backgroundFrame) {
-        alert("Veuillez d'abord capturer le fond.");
-        return;
-    }
+    if (!backgroundFrame) return alert("Capture le fond d'abord");
     trajectory = [];
     recording = true;
     startTime = performance.now();
-    requestAnimationFrame(processFrame);
+    animationId = requestAnimationFrame(processFrame);
 };
 
 document.getElementById("stop-recording").onclick = () => {
     recording = false;
-    if (animationId) {
-        cancelAnimationFrame(animationId);
-        animationId = null;
-    }
+    cancelAnimationFrame(animationId);
 };
 
 /*********************************************************
@@ -79,14 +73,13 @@ function processFrame(timestamp) {
     if (!recording) return;
 
     const t = (timestamp - startTime) / 1000;
-
     ctx.drawImage(video, 0, 0);
+
     const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const bg = backgroundFrame.data;
     const data = frame.data;
 
-    let sumX = 0, sumY = 0, count = 0;
-    let luxSum = 0;
+    let sumX = 0, sumY = 0, count = 0, luxSum = 0;
 
     for (let i = 0; i < data.length; i += 4) {
         const diff =
@@ -94,14 +87,13 @@ function processFrame(timestamp) {
             Math.abs(data[i + 1] - bg[i + 1]) +
             Math.abs(data[i + 2] - bg[i + 2]);
 
-        const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        luxSum += brightness;
+        luxSum += (data[i] + data[i + 1] + data[i + 2]) / 3;
 
         if (diff > 60) {
-            const px = (i / 4) % canvas.width;
-            const py = Math.floor((i / 4) / canvas.width);
-            sumX += px;
-            sumY += py;
+            const x = (i / 4) % canvas.width;
+            const y = Math.floor((i / 4) / canvas.width);
+            sumX += x;
+            sumY += y;
             count++;
         }
     }
@@ -110,119 +102,93 @@ function processFrame(timestamp) {
 
     if (count > 50) {
         const x = sumX / count;
-        const z = canvas.height - (sumY / count);
-        const y = 0;
-
-        trajectory.push({ t, x, y, z });
-
-        ctx.beginPath();
-        ctx.arc(x, canvas.height - z, 5, 0, Math.PI * 2);
-        ctx.fillStyle = "red";
-        ctx.fill();
+        const z = canvas.height - sumY / count;
+        trajectory.push({ t, x, z });
     }
 
-    drawAxes();
     updateStopwatch(t);
-
+    drawAxes();
     animationId = requestAnimationFrame(processFrame);
-}
-
-/*********************************************************
- * CHRONOMÈTRE
- *********************************************************/
-function updateStopwatch(t) {
-    const ms = Math.floor((t % 1) * 100);
-    const s = Math.floor(t % 60);
-    const m = Math.floor(t / 60);
-    stopwatchEl.textContent =
-        `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(2, "0")}`;
-}
-
-/*********************************************************
- * AXES XYZ
- *********************************************************/
-function drawAxes() {
-    axisCtx.clearRect(0, 0, axisCanvas.width, axisCanvas.height);
-
-    // Axe X (rouge)
-    axisCtx.strokeStyle = "red";
-    axisCtx.beginPath();
-    axisCtx.moveTo(0, axisCanvas.height / 2);
-    axisCtx.lineTo(axisCanvas.width, axisCanvas.height / 2);
-    axisCtx.stroke();
-
-    // Axe Y (vert)
-    axisCtx.strokeStyle = "green";
-    axisCtx.beginPath();
-    axisCtx.moveTo(axisCanvas.width / 2, 0);
-    axisCtx.lineTo(axisCanvas.width / 2, axisCanvas.height);
-    axisCtx.stroke();
-
-    // Axe Z (bleu)
-    axisCtx.strokeStyle = "blue";
-    axisCtx.beginPath();
-    axisCtx.moveTo(0, 0);
-    axisCtx.lineTo(axisCanvas.width, axisCanvas.height);
-    axisCtx.stroke();
 }
 
 /*********************************************************
  * CALCULS PHYSIQUES
  *********************************************************/
-document.getElementById("calculate").onclick = computeMotionResults;
+document.getElementById("calculate").onclick = () => {
+    if (trajectory.length < 5) return alert("Pas assez de données");
 
-function computeMotionResults() {
-    if (trajectory.length < 2) {
-        alert("Pas assez de données pour calculer.");
-        return;
-    }
+    const regX = linearRegression(trajectory.map(p => p.t), trajectory.map(p => p.x));
+    const regZ = linearRegression(trajectory.map(p => p.t), trajectory.map(p => p.z));
 
-    const p0 = trajectory[0];
-    const p1 = trajectory[trajectory.length - 1];
+    const vx = regX.a * SCALE;
+    const vz = regZ.a * SCALE;
 
-    const dt = p1.t - p0.t;
-    const dx = p1.x - p0.x;
-    const dy = p1.y - p0.y;
-    const dz = p1.z - p0.z;
+    const speed = Math.sqrt(vx * vx + vz * vz);
+    const angle = Math.atan2(vz, vx) * 180 / Math.PI;
 
-    const speed = Math.sqrt(dx * dx + dz * dz) / dt;
-    const angleXZ = Math.atan2(dz, dx) * 180 / Math.PI;
-
-    angleEl.textContent = angleXZ.toFixed(2);
+    angleEl.textContent = angle.toFixed(2);
     speedEl.textContent = speed.toFixed(2);
-    positionEl.textContent = `(${p1.x.toFixed(1)}, ${p1.y.toFixed(1)}, ${p1.z.toFixed(1)})`;
-
-    error1El.textContent = "0";
-    error2El.textContent = "0";
-
-    // Équations du mouvement
-    const ax = dx / dt;
-    const ay = dy / dt;
-    const az = dz / dt;
+    positionEl.textContent =
+        `(${(trajectory.at(-1).x * SCALE).toFixed(2)}, ${(trajectory.at(-1).z * SCALE).toFixed(2)}) m`;
 
     equationEl.textContent =
-`Équation du mouvement (repère XYZ)
+`Équation du mouvement
 
-x(t) = ${p0.x.toFixed(2)} + ${ax.toFixed(2)} t
-y(t) = ${p0.y.toFixed(2)} + ${ay.toFixed(2)} t
-z(t) = ${p0.z.toFixed(2)} + ${az.toFixed(2)} t
+x(t) = ${regX.b.toFixed(2)} + ${regX.a.toFixed(2)} t
+z(t) = ${regZ.b.toFixed(2)} + ${regZ.a.toFixed(2)} t
 
-Angle XZ = ${angleXZ.toFixed(2)} °
-Vitesse = ${speed.toFixed(2)} px/s`;
+v = ${speed.toFixed(2)} m/s
+Angle = ${angle.toFixed(2)} °`;
 
     drawAllGraphs();
+};
+
+/*********************************************************
+ * RÉGRESSION LINÉAIRE
+ *********************************************************/
+function linearRegression(x, y) {
+    const n = x.length;
+    let sx = 0, sy = 0, sxy = 0, sx2 = 0;
+
+    for (let i = 0; i < n; i++) {
+        sx += x[i];
+        sy += y[i];
+        sxy += x[i] * y[i];
+        sx2 += x[i] * x[i];
+    }
+
+    const a = (n * sxy - sx * sy) / (n * sx2 - sx * sx);
+    const b = (sy - a * sx) / n;
+    return { a, b };
 }
 
 /*********************************************************
  * GRAPHIQUES
  *********************************************************/
 function drawAllGraphs() {
-    drawGraph("graph-x", trajectory.map(p => ({ t: p.t, v: p.x })), "x(t)", "red");
-    drawGraph("graph-y", trajectory.map(p => ({ t: p.t, v: p.y })), "y(t)", "green");
-    drawGraph("graph-z", trajectory.map(p => ({ t: p.t, v: p.z })), "z(t)", "blue");
+    drawGraph("graph-x", trajectory.map(p => ({ t: p.t, v: p.x * SCALE })), "x(t) (m)");
+    drawGraph("graph-z", trajectory.map(p => ({ t: p.t, v: p.z * SCALE })), "z(t) (m)");
+
+    const vData = [];
+    const dData = [];
+    let d = 0;
+
+    for (let i = 1; i < trajectory.length; i++) {
+        const dt = trajectory[i].t - trajectory[i - 1].t;
+        const dx = (trajectory[i].x - trajectory[i - 1].x) * SCALE;
+        const dz = (trajectory[i].z - trajectory[i - 1].z) * SCALE;
+        const v = Math.sqrt(dx * dx + dz * dz) / dt;
+        d += v * dt;
+
+        vData.push({ t: trajectory[i].t, v });
+        dData.push({ t: trajectory[i].t, v: d });
+    }
+
+    drawGraph("graph-y", vData, "v(t) (m/s)");
+    drawGraph("graph-z", dData, "d(t) (m)");
 }
 
-function drawGraph(id, data, label, color) {
+function drawGraph(id, data, label) {
     const c = document.getElementById(id);
     const g = c.getContext("2d");
     g.clearRect(0, 0, c.width, c.height);
@@ -231,33 +197,21 @@ function drawGraph(id, data, label, color) {
     const w = c.width - 2 * pad;
     const h = c.height - 2 * pad;
 
-    // Axes
-    g.strokeStyle = "#000";
-    g.beginPath();
-    g.moveTo(pad, pad);
-    g.lineTo(pad, pad + h);
-    g.lineTo(pad + w, pad + h);
-    g.stroke();
+    g.strokeRect(pad, pad, w, h);
+    if (data.length < 2) return;
 
-    // Données
-    if (data.length === 0) return;
-
-    const tMin = Math.min(...data.map(p => p.t));
-    const tMax = Math.max(...data.map(p => p.t));
+    const tMin = data[0].t;
+    const tMax = data.at(-1).t;
     const vMin = Math.min(...data.map(p => p.v));
-    const vMax = Math.max(...data.map(p => p.v));
+    const vMax = Math.max(...data.map(p => p.v)) || vMin + 1;
 
-    g.strokeStyle = color;
     g.beginPath();
     data.forEach((p, i) => {
-        const x = pad + ((p.t - tMin) / (tMax - tMin)) * w;
-        const y = pad + h - ((p.v - vMin) / (vMax - vMin || 1)) * h;
-        if (i === 0) g.moveTo(x, y);
-        else g.lineTo(x, y);
+        const x = pad + (p.t - tMin) / (tMax - tMin) * w;
+        const y = pad + h - (p.v - vMin) / (vMax - vMin) * h;
+        i ? g.lineTo(x, y) : g.moveTo(x, y);
     });
     g.stroke();
 
-    // Légende
-    g.fillStyle = "#000";
     g.fillText(label, pad + 5, pad - 8);
 }
