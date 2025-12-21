@@ -17,7 +17,7 @@
       background: white;
       padding: 20px;
       border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     }
 
     .lux-display {
@@ -68,7 +68,7 @@
       position: absolute;
       top: 10px;
       right: 10px;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0, 0, 0, 0.7);
       color: white;
       padding: 5px 10px;
       border-radius: 5px;
@@ -91,6 +91,10 @@
       border: none;
       border-radius: 5px;
       cursor: pointer;
+    }
+
+    button:hover {
+      background: #45a049;
     }
 
     .results {
@@ -161,9 +165,9 @@
     <div class="results">
       <p>Angle : <span id="angle-value">—</span> °</p>
       <p>Vitesse : <span id="speed-value">—</span> m/s</p>
-      <p>Position finale : <span id="position-value">(— , —)</span> m</p>
-      <p>Erreur 1 : <span id="error1-value">—</span></p>
-      <p>Erreur 2 : <span id="error2-value">—</span></p>
+      <p>Position finale : <span id="position-value">(— , — , —)</span> m</p>
+      <p id="error1-value">Erreur absolue : —</p>
+      <p id="error2-value">Erreur relative : —</p>
       <pre id="equation">—</pre>
     </div>
 
@@ -171,6 +175,7 @@
     <div class="graphs">
       <canvas id="graph-x" width="300" height="200"></canvas>
       <canvas id="graph-y" width="300" height="200"></canvas>
+      <canvas id="graph-z" width="300" height="200"></canvas>
       <canvas id="graph-v" width="300" height="200"></canvas>
       <canvas id="graph-a" width="300" height="200"></canvas>
     </div>
