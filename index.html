@@ -138,6 +138,7 @@
       margin-bottom: 10px;
     }
   </style>
+   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -145,7 +146,7 @@
     <div class="lux-display">
       Luminosité : <span id="lux-value">0</span> lux
     </div>
-
+    
     <div class="video-container">
       <video id="video" autoplay muted playsinline></video>
       <canvas id="canvas" class="canvas-overlay"></canvas>
@@ -176,6 +177,7 @@
       <canvas id="graph-x" width="300" height="200"></canvas>
       <canvas id="graph-y" width="300" height="200"></canvas>
       <canvas id="graph-z" width="300" height="200"></canvas>
+      <canvas id="graph-d" width="300" height="200"></canvas>
       <canvas id="graph-v" width="300" height="200"></canvas>
       <canvas id="graph-a" width="300" height="200"></canvas>
     </div>
