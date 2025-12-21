@@ -32,14 +32,18 @@ let animationId = null;
 /*********************************************************
  * ACCÈS WEBCAM
  *********************************************************/
-navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => video.srcObject = stream)
-    .catch(err => alert("Erreur webcam : " + err.message));
 
-video.addEventListener("loadedmetadata", () => {
+navigator.mediaDevices.getUserMedia({ video: true })
+.then(stream => {
+  video.srcObject = stream;
+  video.onloadedmetadata = () => {
+    video.play();
+
     canvas.width = axisCanvas.width = video.videoWidth;
     canvas.height = axisCanvas.height = video.videoHeight;
-});
+  };
+})
+.catch(err => alert("Erreur webcam : " + err.message));
 
 /*********************************************************
  * CAPTURE DU FOND
