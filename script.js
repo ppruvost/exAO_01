@@ -139,29 +139,23 @@ function drawAxes() {
   axisCtx.clearRect(0, 0, axisCanvas.width, axisCanvas.height);
   axisCtx.strokeStyle = "red";
 
-  // Axe X (horizontale)
+  // Axe X (horizontal)
   axisCtx.beginPath();
   axisCtx.moveTo(0, axisCanvas.height / 2);
   axisCtx.lineTo(axisCanvas.width, axisCanvas.height / 2);
   axisCtx.stroke();
 
-  // Axe Y (profondeur, perpendiculaire à X)
+  // Axe Z (vertical)
   axisCtx.beginPath();
   axisCtx.moveTo(axisCanvas.width / 2, 0);
   axisCtx.lineTo(axisCanvas.width / 2, axisCanvas.height);
   axisCtx.stroke();
 
-  // Axe Z (hauteur, en diagonale pour la visualisation)
-  axisCtx.beginPath();
-  axisCtx.moveTo(0, axisCanvas.height);
-  axisCtx.lineTo(axisCanvas.width, 0);
-  axisCtx.stroke();
-
   // Légendes des axes
   axisCtx.fillStyle = "red";
   axisCtx.fillText("x", axisCanvas.width - 10, axisCanvas.height / 2 - 5);
-  axisCtx.fillText("y", axisCanvas.width / 2 + 5, 15);
-  axisCtx.fillText("z", axisCanvas.width - 10, 15);
+  axisCtx.fillText("z", axisCanvas.width / 2 + 5, 15);
+  axisCtx.fillText("y (profondeur)", 10, axisCanvas.height / 2 - 5);
 }
 
 /***********************
@@ -172,16 +166,16 @@ function updateStopwatch(t) {
   const s = Math.floor(t % 60);
   const m = Math.floor(t / 60);
   stopwatchEl.textContent =
-    `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${String(ms).padStart(2,"0")}`;
+    `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(2, "0")}`;
 }
 
 /***********************
  * CALCUL DES ERREURS
  ***********************/
-function computeErrors(pN, dt, dx, dy) {
+function computeErrors(pN, dx, dy) {
   // Valeurs théoriques simulées (exemple : mouvement uniforme)
-  const xTheorique = 0.1 + 0.2 * pN.t; // Exemple : x(t) = 0.1 + 0.2*t
-  const yTheorique = 0.05 + 0.1 * pN.t; // Exemple : y(t) = 0.05 + 0.1*t
+  const xTheorique = 0.1 + 0.2 * pN.t;
+  const yTheorique = 0.05 + 0.1 * pN.t;
 
   // Valeurs mesurées
   const xMesure = dx;
@@ -247,14 +241,14 @@ function computeResults() {
   const zt = z0 - 0.5 * g * pN.t * pN.t;
 
   // Calcul des erreurs
-  const { erreurAbsX, erreurAbsY, erreurRelX, erreurRelY } = computeErrors(pN, dt, dx, dy);
+  const { erreurAbsX, erreurAbsY, erreurRelX, erreurRelY } = computeErrors(pN, dx, dy);
 
   const speed = Math.sqrt(dx*dx + dy*dy) / dt;
   const angle = Math.atan2(dy, dx) * 180 / Math.PI;
 
   angleEl.textContent = angle.toFixed(2);
   speedEl.textContent = speed.toFixed(3);
-  positionEl.textContent = `(${dx.toFixed(2)} , ${dy.toFixed(2)} , ${zt.toFixed(2)}) m`;
+  positionEl.textContent = `(${dx.toFixed(2)}, ${dy.toFixed(2)}, ${zt.toFixed(2)}) m`;
   error1El.textContent = `Erreur absolue (x) = ${erreurAbsX} m, (y) = ${erreurAbsY} m`;
   error2El.textContent = `Erreur relative (x) = ${erreurRelX}%, (y) = ${erreurRelY}%`;
 
@@ -274,17 +268,23 @@ Position finale = (${dx.toFixed(2)}, ${dy.toFixed(2)}, ${zt.toFixed(2)}) m`;
  * GRAPHIQUES
  ***********************/
 function drawAllGraphs(velocities, accelerations) {
-  drawGraph("graph-x", trajectory.map(p => ({t: p.t, v: p.x * SCALE})), "x(t) m");
-  drawGraph("graph-y", trajectory.map(p => ({t: p.t, v: p.y * SCALE})), "y(t) m");
+  // Graphique x(t)
+  drawGraph("graph-x", trajectory.map(p => ({ t: p.t, v: p.x * SCALE })), "x(t) m");
 
-  // Génère des données pour z(t)
+  // Graphique y(t) (profondeur)
+  drawGraph("graph-y", trajectory.map(p => ({ t: p.t, v: p.y * SCALE })), "y(t) m");
+
+  // Graphique z(t)
   const zData = trajectory.map(p => {
     const z = z0 - 0.5 * g * p.t * p.t;
     return { t: p.t, v: z };
   });
   drawGraph("graph-z", zData, "z(t) m");
 
+  // Graphique v(t)
   drawGraph("graph-v", velocities, "v(t) m/s");
+
+  // Graphique a(t)
   drawGraph("graph-a", accelerations, "a(t) m/s²");
 }
 
@@ -293,19 +293,24 @@ function drawGraph(id, data, label) {
   const g = c.getContext("2d");
   g.clearRect(0, 0, c.width, c.height);
 
-  if (data.length < 2) return;
+  if (data.length < 2) {
+    g.fillText("Données insuffisantes", 20, 20);
+    return;
+  }
 
   const pad = 30;
   const w = c.width - 2 * pad;
   const h = c.height - 2 * pad;
 
-  const tMin = data[0].t;
-  const tMax = data[data.length - 1].t;
+  const tMin = Math.min(...data.map(p => p.t));
+  const tMax = Math.max(...data.map(p => p.t));
   const vMin = Math.min(...data.map(p => p.v));
   const vMax = Math.max(...data.map(p => p.v));
 
+  // Dessine le cadre du graphique
   g.strokeRect(pad, pad, w, h);
 
+  // Trace les données
   g.beginPath();
   data.forEach((p, i) => {
     const x = pad + ((p.t - tMin) / (tMax - tMin)) * w;
@@ -314,5 +319,15 @@ function drawGraph(id, data, label) {
     else g.lineTo(x, y);
   });
   g.stroke();
+
+  // Légende
   g.fillText(label, pad + 5, pad - 8);
+
+  // Axes
+  g.beginPath();
+  g.moveTo(pad, pad + h);
+  g.lineTo(pad + w, pad + h); // Axe horizontal (t)
+  g.moveTo(pad, pad);
+  g.lineTo(pad, pad + h); // Axe vertical (valeur)
+  g.stroke();
 }
