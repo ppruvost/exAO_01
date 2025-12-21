@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Suivi d'Objet et Calculs Physiques</title>
+
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -18,6 +19,11 @@
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h2, h3 {
+            text-align: center;
+            margin-top: 20px;
         }
 
         .lux-display {
@@ -128,6 +134,7 @@
             justify-content: space-between;
             gap: 10px;
             margin-top: 15px;
+            flex-wrap: wrap;
         }
 
         .graphs canvas {
@@ -139,44 +146,61 @@
 </head>
 
 <body>
-    <div class="container">
-        <div class="lux-display">
-            Luminosité : <span id="lux-value">0</span> lux
-        </div>
 
-        <div class="video-container">
-            <video id="video" autoplay muted></video>
-            <canvas id="canvas" class="canvas-overlay"></canvas>
-            <canvas id="3d-axis" class="axis-overlay"></canvas>
-            <div class="crosshair"></div>
-            <div class="stopwatch" id="stopwatch">00:00:00.00</div>
-        </div>
+<div class="container">
 
-        <div class="controls">
-            <button id="capture-bg">Capturer le fond</button>
-            <button id="start-recording">Lancer l'enregistrement</button>
-            <button id="stop-recording">Arrêter l'enregistrement</button>
-            <button id="calculate">Calculer</button>
-        </div>
+    <h2>Suivi de mouvement et analyse cinématique</h2>
 
-        <div class="results">
-            <p>Angle : <span id="angle-value">—</span> °</p>
-            <p>Vitesse : <span id="speed-value">—</span> px/s</p>
-            <p>Position (X, Y, Z) : <span id="position-value">—</span></p>
-            <p>Erreur absolue (e1) : <span id="error1-value">—</span></p>
-            <p>Erreur relative (e2) : <span id="error2-value">—</span></p>
-
-            <h3>Équation du mouvement</h3>
-            <pre id="equation">—</pre>
-        </div>
-
-        <div class="graphs">
-            <canvas id="graph-x" width="250" height="200"></canvas>
-            <canvas id="graph-y" width="250" height="200"></canvas>
-            <canvas id="graph-z" width="250" height="200"></canvas>
-        </div>
+    <div class="lux-display">
+        Luminosité : <span id="lux-value">0</span> lux
     </div>
 
-    <script src="script.js"></script>
+    <!-- Vidéo et superpositions -->
+    <div class="video-container">
+        <video id="video" autoplay muted></video>
+        <canvas id="canvas" class="canvas-overlay"></canvas>
+        <canvas id="3d-axis" class="axis-overlay"></canvas>
+        <div class="crosshair"></div>
+        <div class="stopwatch" id="stopwatch">00:00:00.00</div>
+    </div>
+
+    <!-- Boutons -->
+    <div class="controls">
+        <button id="capture-bg">Capturer le fond</button>
+        <button id="start-recording">Lancer l'enregistrement</button>
+        <button id="stop-recording">Arrêter l'enregistrement</button>
+        <button id="calculate">Calculer</button>
+    </div>
+
+    <!-- Résultats numériques -->
+    <div class="results">
+        <p>Angle : <span id="angle-value">—</span> °</p>
+        <p>Vitesse : <span id="speed-value">—</span> px/s</p>
+        <p>Position (X, Y, Z) : <span id="position-value">—</span></p>
+        <p>Erreur absolue (e1) : <span id="error1-value">—</span></p>
+        <p>Erreur relative (e2) : <span id="error2-value">—</span></p>
+
+        <h3>Équation du mouvement (repère XYZ)</h3>
+        <pre id="equation">—</pre>
+    </div>
+
+    <!-- Graphiques position -->
+    <h3>Évolution des coordonnées</h3>
+    <div class="graphs">
+        <canvas id="graph-x" width="250" height="200"></canvas>
+        <canvas id="graph-y" width="250" height="200"></canvas>
+        <canvas id="graph-z" width="250" height="200"></canvas>
+    </div>
+
+    <!-- Graphiques vitesse et distance -->
+    <h3>Analyse cinématique</h3>
+    <div class="graphs">
+        <canvas id="graph-v" width="250" height="200"></canvas>
+        <canvas id="graph-d" width="250" height="200"></canvas>
+    </div>
+
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
