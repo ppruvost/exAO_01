@@ -2,6 +2,7 @@
  * PARAMÈTRES
  ***********************/
 const SCALE = 0.002;
+let myCharts = {}; // Variable globale pour stocker les graphiques Chart.js
 
 /***********************
  * DOM
@@ -268,6 +269,9 @@ Position finale = (${dx.toFixed(2)}, ${dy.toFixed(2)}, ${zt.toFixed(2)}) m`;
  * GRAPHIQUES
  ***********************/
 function drawAllGraphs(velocities, accelerations) {
+  const g = 9.81;
+  const z0 = 2.0;
+
   // Graphique x(t)
   drawGraph("graph-x", trajectory.map(p => ({ t: p.t, v: p.x * SCALE })), "x(t) m");
 
@@ -289,45 +293,54 @@ function drawAllGraphs(velocities, accelerations) {
 }
 
 function drawGraph(id, data, label) {
-  const c = document.getElementById(id);
-  const g = c.getContext("2d");
-  g.clearRect(0, 0, c.width, c.height);
+  const ctx = document.getElementById(id).getContext('2d');
+
+  // Détruire le graphique précédent s'il existe
+  if (myCharts[id]) {
+    myCharts[id].destroy();
+  }
 
   if (data.length < 2) {
+    const c = document.getElementById(id);
+    const g = c.getContext("2d");
+    g.clearRect(0, 0, c.width, c.height);
     g.fillText("Données insuffisantes", 20, 20);
     return;
   }
 
-  const pad = 30;
-  const w = c.width - 2 * pad;
-  const h = c.height - 2 * pad;
+  // Extraire les données pour Chart.js
+  const labels = data.map(p => p.t.toFixed(2));
+  const values = data.map(p => p.v);
 
-  const tMin = Math.min(...data.map(p => p.t));
-  const tMax = Math.max(...data.map(p => p.t));
-  const vMin = Math.min(...data.map(p => p.v));
-  const vMax = Math.max(...data.map(p => p.v));
-
-  // Dessine le cadre du graphique
-  g.strokeRect(pad, pad, w, h);
-
-  // Trace les données
-  g.beginPath();
-  data.forEach((p, i) => {
-    const x = pad + ((p.t - tMin) / (tMax - tMin)) * w;
-    const y = pad + h - ((p.v - vMin) / (vMax - vMin || 1)) * h;
-    if (i === 0) g.moveTo(x, y);
-    else g.lineTo(x, y);
+  // Créer le graphique
+  myCharts[id] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: label,
+        data: values,
+        borderColor: 'rgb(75, 192, 192)',
+        tension: 0.1,
+        fill: false
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Temps (s)'
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: label
+          }
+        }
+      }
+    }
   });
-  g.stroke();
-
-  // Légende
-  g.fillText(label, pad + 5, pad - 8);
-
-  // Axes
-  g.beginPath();
-  g.moveTo(pad, pad + h);
-  g.lineTo(pad + w, pad + h); // Axe horizontal (t)
-  g.moveTo(pad, pad);
-  g.lineTo(pad, pad + h); // Axe vertical (valeur)
-  g.stroke();
 }
