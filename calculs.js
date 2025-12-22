@@ -49,7 +49,6 @@ function computeXLinear(trajectory, scale) {
 
 /* y(t) linéaire (constante si non mesurée) */
 function computeYLinear(trajectory, scale) {
-    // Si y(t) n'est pas mesuré, retourner une constante
     return {
         a: 0,
         b: 0,
@@ -65,10 +64,12 @@ function computeVelocityModel(trajectory, scale) {
         const dt = trajectory[i].t - trajectory[i - 1].t;
         const dx = (trajectory[i].x - trajectory[i - 1].x) * scale;
         const dz = (trajectory[i].z - trajectory[i - 1].z) * scale;
-        raw.push({ t: trajectory[i].t, v: Math.sqrt(dx*dx + dz*dz) / dt });
+        const speed = Math.sqrt(dx * dx + dz * dz) / dt;
+        raw.push({ t: trajectory[i].t, v: speed });
     }
 
     const reg = linearRegression(raw);
+    console.log("Pente de v(t) :", reg.a); // Pour débogage
     return {
         a: reg.a,
         b: reg.b,
