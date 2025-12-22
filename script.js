@@ -15,8 +15,11 @@ const axisCtx = axisCanvas.getContext("2d");
 
 const angleEl = document.getElementById("angle-value");
 const speedEl = document.getElementById("speed-value");
+const positionEl = document.getElementById("position-value");
 const equationEl = document.getElementById("equation");
 const stopwatchEl = document.getElementById("stopwatch");
+const error1El = document.getElementById("error1-value");
+const error2El = document.getElementById("error2-value");
 
 /************************************************
  * VARIABLES
@@ -83,7 +86,6 @@ function processFrame(tStamp) {
     if (!recording) return;
 
     const t = (tStamp - startTime) / 1000;
-
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const bg = backgroundFrame.data;
@@ -97,7 +99,7 @@ function processFrame(tStamp) {
             Math.abs(d[i + 1] - bg[i + 1]) +
             Math.abs(d[i + 2] - bg[i + 2]);
 
-        if (diff > 60) {
+        if (diff > 60) { // Seuil ajustable
             const px = (i / 4) % canvas.width;
             const py = Math.floor((i / 4) / canvas.width);
             sx += px;
@@ -106,7 +108,7 @@ function processFrame(tStamp) {
         }
     }
 
-    if (n > 40) {
+    if (n > 40) { // Seuil de pixels détectés
         const xc = sx / n;
         const zc_screen = canvas.height - sy / n;
 
@@ -117,8 +119,6 @@ function processFrame(tStamp) {
         }
 
         const x = xc - x0;
-
-        // ✅ ALTITUDE PHYSIQUE (SIGNÉE)
         const z = -(zc_screen - z0);
 
         trajectory.push({ t, x, z });
@@ -126,6 +126,7 @@ function processFrame(tStamp) {
         lastZ = z;
     }
 
+    // Dessiner le point rouge à la dernière position connue
     drawPoint();
     updateStopwatch(t);
     requestAnimationFrame(processFrame);
@@ -171,21 +172,37 @@ document.getElementById("calculate").onclick = () => {
     }
 
     const zLin = computeZLinear(trajectory, SCALE);
+    const xLin = computeXLinear(trajectory, SCALE);
+    const yLin = computeYLinear(trajectory, SCALE);
     const vMod = computeVelocityModel(trajectory, SCALE);
     const aData = computeAcceleration(vMod);
 
-    angleEl.textContent =
-        (Math.atan(zLin.a) * 180 / Math.PI).toFixed(2);
+    angleEl.textContent = (Math.atan(zLin.a) * 180 / Math.PI).toFixed(2);
+    speedEl.textContent = Math.abs(vMod.b).toFixed(2);
 
-    speedEl.textContent =
-        Math.abs(vMod.b).toFixed(2);
+    // Calculer la position finale
+    const finalPosition = trajectory[trajectory.length - 1];
+    const finalX = finalPosition.x * SCALE;
+    const finalZ = finalPosition.z * SCALE;
+    positionEl.textContent = `(${finalX.toFixed(3)}, 0, ${finalZ.toFixed(3)})`;
+
+    // Exemple de calcul d'erreur (à adapter selon tes besoins)
+    const theoreticalZ = 0; // Remplace par une valeur théorique
+    const errorAbs = Math.abs(finalZ - theoreticalZ);
+    const errorRel = theoreticalZ !== 0 ? (errorAbs / Math.abs(theoreticalZ)) * 100 : 0;
+    error1El.textContent = `Erreur absolue : ${errorAbs.toFixed(3)} m`;
+    error2El.textContent = `Erreur relative : ${errorRel.toFixed(2)} %`;
 
     equationEl.textContent =
 `z(t) = ${zLin.b.toFixed(3)} + ${zLin.a.toFixed(3)} t
+x(t) = ${xLin.b.toFixed(3)} + ${xLin.a.toFixed(3)} t
+y(t) = ${yLin.b.toFixed(3)}
 v(t) = ${vMod.a.toFixed(3)} t + ${vMod.b.toFixed(3)}
 a(t) = ${vMod.a.toFixed(3)} m/s²`;
 
     drawGraph("graph-z", zLin.data, "z(t)");
+    drawGraph("graph-x", xLin.data, "x(t)");
+    drawGraph("graph-y", yLin.data, "y(t)");
     drawGraph("graph-v", vMod.data, "v(t)");
     drawGraph("graph-a", aData, "a(t)");
 };
