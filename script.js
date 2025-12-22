@@ -31,13 +31,21 @@ let lastX = 0, lastZ = 0;
 /************************************************
  * WEBCAM
  ************************************************/
-navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-    .then(stream => video.srcObject = stream);
+navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment" },
+    audio: false
+}).then(stream => {
+    video.srcObject = stream;
+}).catch(err => {
+    alert("Erreur webcam : " + err.message);
+});
 
+/************************************************
+ * DIMENSIONS CANVAS (FIX MOBILE)
+ ************************************************/
 video.onloadedmetadata = () => {
-    const r = video.getBoundingClientRect();
-    canvas.width = axisCanvas.width = r.width;
-    canvas.height = axisCanvas.height = r.height;
+    canvas.width = axisCanvas.width = video.videoWidth;
+    canvas.height = axisCanvas.height = video.videoHeight;
 };
 
 /************************************************
@@ -52,7 +60,10 @@ document.getElementById("capture-bg").onclick = () => {
  * ENREGISTREMENT
  ************************************************/
 document.getElementById("start-recording").onclick = () => {
-    if (!backgroundFrame) return alert("Capturer le fond");
+    if (!backgroundFrame) {
+        alert("Veuillez d'abord capturer le fond");
+        return;
+    }
     trajectory = [];
     originLocked = false;
     recording = true;
@@ -60,7 +71,9 @@ document.getElementById("start-recording").onclick = () => {
     requestAnimationFrame(processFrame);
 };
 
-document.getElementById("stop-recording").onclick = () => recording = false;
+document.getElementById("stop-recording").onclick = () => {
+    recording = false;
+};
 
 /************************************************
  * TRAITEMENT VIDÉO
@@ -70,6 +83,7 @@ function processFrame(tStamp) {
 
     const t = (tStamp - startTime) / 1000;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
     const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const bg = backgroundFrame.data;
     const d = frame.data;
@@ -77,11 +91,17 @@ function processFrame(tStamp) {
     let sx = 0, sy = 0, n = 0;
 
     for (let i = 0; i < d.length; i += 4) {
-        const diff = Math.abs(d[i]-bg[i]) + Math.abs(d[i+1]-bg[i+1]) + Math.abs(d[i+2]-bg[i+2]);
+        const diff =
+            Math.abs(d[i] - bg[i]) +
+            Math.abs(d[i + 1] - bg[i + 1]) +
+            Math.abs(d[i + 2] - bg[i + 2]);
+
         if (diff > 60) {
-            const px = (i/4) % canvas.width;
-            const py = Math.floor((i/4)/canvas.width);
-            sx += px; sy += py; n++;
+            const px = (i / 4) % canvas.width;
+            const py = Math.floor((i / 4) / canvas.width);
+            sx += px;
+            sy += py;
+            n++;
         }
     }
 
@@ -108,7 +128,7 @@ function processFrame(tStamp) {
 }
 
 /************************************************
- * POINT ROUGE
+ * POINT ROUGE (t=0 à gauche)
  ************************************************/
 function drawPoint() {
     ctx.beginPath();
@@ -125,7 +145,10 @@ function drawPoint() {
  * CALCULS & GRAPHES
  ************************************************/
 document.getElementById("calculate").onclick = () => {
-    if (trajectory.length < 5) return;
+    if (trajectory.length < 5) {
+        alert("Pas assez de données");
+        return;
+    }
 
     const zLin = computeZLinear(trajectory, SCALE);
     const vMod = computeVelocityModel(trajectory, SCALE);
@@ -152,23 +175,28 @@ function drawGraph(id, data, label) {
     const g = c.getContext("2d");
     g.clearRect(0, 0, c.width, c.height);
 
-    const p = 30, w = c.width - 2*p, h = c.height - 2*p;
+    const p = 30;
+    const w = c.width - 2 * p;
+    const h = c.height - 2 * p;
+
     g.strokeStyle = "#000";
     g.lineWidth = 1;
     g.strokeRect(p, p, w, h);
 
     if (data.length < 2) return;
 
-    const t0 = data[0].t, t1 = data.at(-1).t;
+    const t0 = data[0].t;
+    const t1 = data[data.length - 1].t;
+
     const vMin = Math.min(...data.map(d => d.v));
     const vMax = Math.max(...data.map(d => d.v)) || 1;
 
     g.beginPath();
     data.forEach((pt, i) => {
-        const x = p + (pt.t - t0)/(t1 - t0) * w;
-        const y = p + h - (pt.v - vMin)/(vMax - vMin) * h;
-        i === 0 ? g.moveTo(x,y) : g.lineTo(x,y);
+        const x = p + (pt.t - t0) / (t1 - t0) * w;
+        const y = p + h - (pt.v - vMin) / (vMax - vMin) * h;
+        i === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
     });
     g.stroke();
-    g.fillText(label, p+5, p-8);
+    g.fillText(label, p + 5, p - 8);
 }
