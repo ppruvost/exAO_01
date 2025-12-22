@@ -24,10 +24,36 @@ function computeZLinear(trajectory, scale) {
     const zData = trajectory.map(p => ({ t: p.t, v: p.z * scale }));
     const reg = linearRegression(zData);
 
+    // Assure que la pente est négative pour une droite décroissante
+    if (reg.a > 0) {
+        reg.a = -Math.abs(reg.a);
+    }
+
     return {
         a: reg.a,
         b: reg.b,
         data: zData.map(p => ({ t: p.t, v: reg.a * p.t + reg.b }))
+    };
+}
+
+/* x(t) linéaire */
+function computeXLinear(trajectory, scale) {
+    const xData = trajectory.map(p => ({ t: p.t, v: p.x * scale }));
+    const reg = linearRegression(xData);
+    return {
+        a: reg.a,
+        b: reg.b,
+        data: xData.map(p => ({ t: p.t, v: reg.a * p.t + reg.b }))
+    };
+}
+
+/* y(t) linéaire (constante si non mesurée) */
+function computeYLinear(trajectory, scale) {
+    // Si y(t) n'est pas mesuré, retourner une constante
+    return {
+        a: 0,
+        b: 0,
+        data: trajectory.map(p => ({ t: p.t, v: 0 }))
     };
 }
 
@@ -52,5 +78,6 @@ function computeVelocityModel(trajectory, scale) {
 
 /* a(t) constante */
 function computeAcceleration(vModel) {
+    // a(t) est constante, donc une droite horizontale
     return vModel.data.map(p => ({ t: p.t, v: vModel.a }));
 }
