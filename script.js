@@ -9,12 +9,14 @@ const SCALE = 0.002; // m / pixel
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+
 const axisCanvas = document.getElementById("3d-axis");
 const axisCtx = axisCanvas.getContext("2d");
 
 const angleEl = document.getElementById("angle-value");
 const speedEl = document.getElementById("speed-value");
 const equationEl = document.getElementById("equation");
+const stopwatchEl = document.getElementById("stopwatch");
 
 /************************************************
  * VARIABLES
@@ -29,19 +31,17 @@ let x0 = 0, z0 = 0;
 let lastX = 0, lastZ = 0;
 
 /************************************************
- * WEBCAM
+ * WEBCAM (COMPATIBLE MOBILE)
  ************************************************/
 navigator.mediaDevices.getUserMedia({
     video: { facingMode: "environment" },
     audio: false
-}).then(stream => {
-    video.srcObject = stream;
-}).catch(err => {
-    alert("Erreur webcam : " + err.message);
-});
+})
+.then(stream => video.srcObject = stream)
+.catch(err => alert("Erreur webcam : " + err.message));
 
 /************************************************
- * DIMENSIONS CANVAS (FIX MOBILE)
+ * DIMENSIONS CANVAS
  ************************************************/
 video.onloadedmetadata = () => {
     canvas.width = axisCanvas.width = video.videoWidth;
@@ -49,7 +49,7 @@ video.onloadedmetadata = () => {
 };
 
 /************************************************
- * CAPTURE FOND
+ * CAPTURE DU FOND
  ************************************************/
 document.getElementById("capture-bg").onclick = () => {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -68,6 +68,7 @@ document.getElementById("start-recording").onclick = () => {
     originLocked = false;
     recording = true;
     startTime = performance.now();
+    stopwatchEl.textContent = "00:00.00";
     requestAnimationFrame(processFrame);
 };
 
@@ -82,8 +83,8 @@ function processFrame(tStamp) {
     if (!recording) return;
 
     const t = (tStamp - startTime) / 1000;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const bg = backgroundFrame.data;
     const d = frame.data;
@@ -107,16 +108,18 @@ function processFrame(tStamp) {
 
     if (n > 40) {
         const xc = sx / n;
-        const zc = canvas.height - sy / n;
+        const zc_screen = canvas.height - sy / n;
 
         if (!originLocked) {
             x0 = xc;
-            z0 = zc;
+            z0 = zc_screen;
             originLocked = true;
         }
 
         const x = xc - x0;
-        const z = zc - z0;
+
+        // ✅ ALTITUDE PHYSIQUE (SIGNÉE)
+        const z = -(zc_screen - z0);
 
         trajectory.push({ t, x, z });
         lastX = x;
@@ -124,21 +127,38 @@ function processFrame(tStamp) {
     }
 
     drawPoint();
+    updateStopwatch(t);
     requestAnimationFrame(processFrame);
 }
 
 /************************************************
- * POINT ROUGE (t=0 à gauche)
+ * POINT ROUGE (t=0 À GAUCHE)
  ************************************************/
 function drawPoint() {
     ctx.beginPath();
     ctx.arc(
         canvas.width * 0.1 + lastX,
         canvas.height / 2 - lastZ,
-        4, 0, Math.PI * 2
+        4,
+        0,
+        Math.PI * 2
     );
     ctx.fillStyle = "red";
     ctx.fill();
+}
+
+/************************************************
+ * CHRONOMÈTRE
+ ************************************************/
+function updateStopwatch(t) {
+    const min = Math.floor(t / 60);
+    const sec = Math.floor(t % 60);
+    const cent = Math.floor((t % 1) * 100);
+
+    stopwatchEl.textContent =
+        `${String(min).padStart(2, "0")}:` +
+        `${String(sec).padStart(2, "0")}.` +
+        `${String(cent).padStart(2, "0")}`;
 }
 
 /************************************************
@@ -154,13 +174,16 @@ document.getElementById("calculate").onclick = () => {
     const vMod = computeVelocityModel(trajectory, SCALE);
     const aData = computeAcceleration(vMod);
 
-    angleEl.textContent = (Math.atan(zLin.a) * 180 / Math.PI).toFixed(2);
-    speedEl.textContent = Math.abs(vMod.b).toFixed(2);
+    angleEl.textContent =
+        (Math.atan(zLin.a) * 180 / Math.PI).toFixed(2);
+
+    speedEl.textContent =
+        Math.abs(vMod.b).toFixed(2);
 
     equationEl.textContent =
-`z(t) = ${zLin.b.toFixed(2)} + ${zLin.a.toFixed(2)} t
-v(t) = ${vMod.a.toFixed(2)} t + ${vMod.b.toFixed(2)}
-a(t) = ${vMod.a.toFixed(2)} m/s²`;
+`z(t) = ${zLin.b.toFixed(3)} + ${zLin.a.toFixed(3)} t
+v(t) = ${vMod.a.toFixed(3)} t + ${vMod.b.toFixed(3)}
+a(t) = ${vMod.a.toFixed(3)} m/s²`;
 
     drawGraph("graph-z", zLin.data, "z(t)");
     drawGraph("graph-v", vMod.data, "v(t)");
@@ -168,7 +191,7 @@ a(t) = ${vMod.a.toFixed(2)} m/s²`;
 };
 
 /************************************************
- * GRAPHIQUE SOBRE
+ * GRAPHIQUES (TRAITS NOIRS, SANS POINTS)
  ************************************************/
 function drawGraph(id, data, label) {
     const c = document.getElementById(id);
@@ -198,5 +221,7 @@ function drawGraph(id, data, label) {
         i === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
     });
     g.stroke();
+
+    g.fillStyle = "#000";
     g.fillText(label, p + 5, p - 8);
 }
