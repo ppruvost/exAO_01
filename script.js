@@ -2,6 +2,7 @@
  * PARAMÈTRES
  ************************************************/
 const SCALE = 0.002; // m / pixel
+const SMOOTH = 0.85; // lissage trajectoire
 
 /************************************************
  * DOM
@@ -9,9 +10,6 @@ const SCALE = 0.002; // m / pixel
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
-
-const axisCanvas = document.getElementById("3d-axis");
-const axisCtx = axisCanvas.getContext("2d");
 
 const angleEl = document.getElementById("angle-value");
 const speedEl = document.getElementById("speed-value");
@@ -28,31 +26,31 @@ let startTime = 0;
 
 let originLocked = false;
 let x0 = 0, z0 = 0;
-let lastX = 0, lastZ = 0;
+
+let lastX = 0;
+let lastZ = 0;
 
 /************************************************
- * WEBCAM (COMPATIBLE MOBILE)
+ * WEBCAM (MOBILE OK)
  ************************************************/
 navigator.mediaDevices.getUserMedia({
     video: { facingMode: "environment" },
     audio: false
-})
-.then(stream => video.srcObject = stream)
-.catch(err => alert("Erreur webcam : " + err.message));
+}).then(stream => video.srcObject = stream);
 
 /************************************************
- * DIMENSIONS CANVAS
+ * CANVAS
  ************************************************/
 video.onloadedmetadata = () => {
-    canvas.width = axisCanvas.width = video.videoWidth;
-    canvas.height = axisCanvas.height = video.videoHeight;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
 };
 
 /************************************************
- * CAPTURE DU FOND
+ * CAPTURE FOND
  ************************************************/
 document.getElementById("capture-bg").onclick = () => {
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0);
     backgroundFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 };
 
@@ -61,7 +59,7 @@ document.getElementById("capture-bg").onclick = () => {
  ************************************************/
 document.getElementById("start-recording").onclick = () => {
     if (!backgroundFrame) {
-        alert("Veuillez d'abord capturer le fond");
+        alert("Capture le fond d'abord");
         return;
     }
     trajectory = [];
@@ -79,12 +77,12 @@ document.getElementById("stop-recording").onclick = () => {
 /************************************************
  * TRAITEMENT VIDÉO
  ************************************************/
-function processFrame(tStamp) {
+function processFrame(ts) {
     if (!recording) return;
 
-    const t = (tStamp - startTime) / 1000;
+    const t = (ts - startTime) / 1000;
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0);
     const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const bg = backgroundFrame.data;
     const d = frame.data;
@@ -97,33 +95,35 @@ function processFrame(tStamp) {
             Math.abs(d[i + 1] - bg[i + 1]) +
             Math.abs(d[i + 2] - bg[i + 2]);
 
-        if (diff > 60) {
-            const px = (i / 4) % canvas.width;
-            const py = Math.floor((i / 4) / canvas.width);
-            sx += px;
-            sy += py;
+        if (diff > 55) {
+            const x = (i / 4) % canvas.width;
+            const y = Math.floor((i / 4) / canvas.width);
+            sx += x;
+            sy += y;
             n++;
         }
     }
 
-    if (n > 40) {
+    if (n > 30) {
         const xc = sx / n;
-        const zc_screen = canvas.height - sy / n;
+        const zc = canvas.height - sy / n;
 
         if (!originLocked) {
             x0 = xc;
-            z0 = zc_screen;
+            z0 = zc;
             originLocked = true;
+            lastX = 0;
+            lastZ = 0;
         }
 
         const x = xc - x0;
+        const z = -(zc - z0); // altitude physique
 
-        // ✅ ALTITUDE PHYSIQUE (SIGNÉE)
-        const z = -(zc_screen - z0);
+        // 🔧 LISSAGE
+        lastX = SMOOTH * lastX + (1 - SMOOTH) * x;
+        lastZ = SMOOTH * lastZ + (1 - SMOOTH) * z;
 
-        trajectory.push({ t, x, z });
-        lastX = x;
-        lastZ = z;
+        trajectory.push({ t, x: lastX, z: lastZ });
     }
 
     drawPoint();
@@ -132,14 +132,14 @@ function processFrame(tStamp) {
 }
 
 /************************************************
- * POINT ROUGE (t=0 À GAUCHE)
+ * POINT ROUGE (DERNIÈRE POSITION TOUJOURS)
  ************************************************/
 function drawPoint() {
     ctx.beginPath();
     ctx.arc(
         canvas.width * 0.1 + lastX,
         canvas.height / 2 - lastZ,
-        4,
+        5,
         0,
         Math.PI * 2
     );
@@ -151,47 +151,83 @@ function drawPoint() {
  * CHRONOMÈTRE
  ************************************************/
 function updateStopwatch(t) {
-    const min = Math.floor(t / 60);
-    const sec = Math.floor(t % 60);
-    const cent = Math.floor((t % 1) * 100);
-
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    const c = Math.floor((t % 1) * 100);
     stopwatchEl.textContent =
-        `${String(min).padStart(2, "0")}:` +
-        `${String(sec).padStart(2, "0")}.` +
-        `${String(cent).padStart(2, "0")}`;
+        `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(c).padStart(2, "0")}`;
 }
 
 /************************************************
  * CALCULS & GRAPHES
  ************************************************/
 document.getElementById("calculate").onclick = () => {
-    if (trajectory.length < 5) {
+    if (trajectory.length < 10) {
         alert("Pas assez de données");
         return;
     }
 
-    const zLin = computeZLinear(trajectory, SCALE);
-    const vMod = computeVelocityModel(trajectory, SCALE);
-    const aData = computeAcceleration(vMod);
+    const zData = trajectory.map(p => ({
+        t: p.t,
+        v: p.z * SCALE
+    }));
+
+    const vData = [];
+    for (let i = 1; i < trajectory.length; i++) {
+        const dt = trajectory[i].t - trajectory[i - 1].t;
+        if (dt > 0) {
+            vData.push({
+                t: trajectory[i].t,
+                v: (trajectory[i].z - trajectory[i - 1].z) * SCALE / dt
+            });
+        }
+    }
+
+    const vLin = linearRegression(vData);
+    const aVal = vLin.a;
+
+    const aData = vData.map(p => ({
+        t: p.t,
+        v: aVal
+    }));
 
     angleEl.textContent =
-        (Math.atan(zLin.a) * 180 / Math.PI).toFixed(2);
+        (Math.atan(vLin.a) * 180 / Math.PI).toFixed(2);
 
-    speedEl.textContent =
-        Math.abs(vMod.b).toFixed(2);
+    speedEl.textContent = Math.abs(vLin.b).toFixed(2);
 
     equationEl.textContent =
-`z(t) = ${zLin.b.toFixed(3)} + ${zLin.a.toFixed(3)} t
-v(t) = ${vMod.a.toFixed(3)} t + ${vMod.b.toFixed(3)}
-a(t) = ${vMod.a.toFixed(3)} m/s²`;
+`z(t) = ${zData[0].v.toFixed(3)} + ${vLin.b.toFixed(3)} t
+v(t) = ${vLin.a.toFixed(3)} t + ${vLin.b.toFixed(3)}
+a(t) = ${aVal.toFixed(3)} m/s²`;
 
-    drawGraph("graph-z", zLin.data, "z(t)");
-    drawGraph("graph-v", vMod.data, "v(t)");
+    drawGraph("graph-z", zData, "z(t)");
+    drawGraph("graph-v", vData, "v(t)");
     drawGraph("graph-a", aData, "a(t)");
 };
 
 /************************************************
- * GRAPHIQUES (TRAITS NOIRS, SANS POINTS)
+ * RÉGRESSION LINÉAIRE
+ ************************************************/
+function linearRegression(data) {
+    const n = data.length;
+    let st = 0, sv = 0, stt = 0, stv = 0;
+
+    data.forEach(p => {
+        st += p.t;
+        sv += p.v;
+        stt += p.t * p.t;
+        stv += p.t * p.v;
+    });
+
+    const a = (n * stv - st * sv) / (n * stt - st * st);
+    const b = (sv - a * st) / n;
+
+    return { a, b };
+}
+
+/************************************************
+ * GRAPHIQUES (TRAITS FINS NOIRS)
  ************************************************/
 function drawGraph(id, data, label) {
     const c = document.getElementById(id);
@@ -210,7 +246,6 @@ function drawGraph(id, data, label) {
 
     const t0 = data[0].t;
     const t1 = data[data.length - 1].t;
-
     const vMin = Math.min(...data.map(d => d.v));
     const vMax = Math.max(...data.map(d => d.v)) || 1;
 
@@ -222,6 +257,5 @@ function drawGraph(id, data, label) {
     });
     g.stroke();
 
-    g.fillStyle = "#000";
     g.fillText(label, p + 5, p - 8);
 }
