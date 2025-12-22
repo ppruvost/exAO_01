@@ -99,7 +99,7 @@ function processFrame(tStamp) {
             Math.abs(d[i + 1] - bg[i + 1]) +
             Math.abs(d[i + 2] - bg[i + 2]);
 
-        if (diff > 60) { // Seuil ajustable
+        if (diff > 60) {
             const px = (i / 4) % canvas.width;
             const py = Math.floor((i / 4) / canvas.width);
             sx += px;
@@ -108,7 +108,7 @@ function processFrame(tStamp) {
         }
     }
 
-    if (n > 40) { // Seuil de pixels détectés
+    if (n > 40) {
         const xc = sx / n;
         const zc_screen = canvas.height - sy / n;
 
@@ -126,7 +126,6 @@ function processFrame(tStamp) {
         lastZ = z;
     }
 
-    // Dessiner le point rouge à la dernière position connue
     drawPoint();
     updateStopwatch(t);
     requestAnimationFrame(processFrame);
@@ -177,6 +176,10 @@ document.getElementById("calculate").onclick = () => {
     const vMod = computeVelocityModel(trajectory, SCALE);
     const aData = computeAcceleration(vMod);
 
+    // Débogage : afficher les données de a(t)
+    console.log("Données de a(t) :", aData);
+    console.log("Valeur de l'accélération (vMod.a) :", vMod.a);
+
     angleEl.textContent = (Math.atan(zLin.a) * 180 / Math.PI).toFixed(2);
     speedEl.textContent = Math.abs(vMod.b).toFixed(2);
 
@@ -186,8 +189,8 @@ document.getElementById("calculate").onclick = () => {
     const finalZ = finalPosition.z * SCALE;
     positionEl.textContent = `(${finalX.toFixed(3)}, 0, ${finalZ.toFixed(3)})`;
 
-    // Exemple de calcul d'erreur (à adapter selon tes besoins)
-    const theoreticalZ = 0; // Remplace par une valeur théorique
+    // Exemple de calcul d'erreur
+    const theoreticalZ = 0;
     const errorAbs = Math.abs(finalZ - theoreticalZ);
     const errorRel = theoreticalZ !== 0 ? (errorAbs / Math.abs(theoreticalZ)) * 100 : 0;
     error1El.textContent = `Erreur absolue : ${errorAbs.toFixed(3)} m`;
@@ -223,7 +226,10 @@ function drawGraph(id, data, label) {
     g.lineWidth = 1;
     g.strokeRect(p, p, w, h);
 
-    if (data.length < 2) return;
+    if (data.length < 2) {
+        console.warn(`Pas assez de données pour dessiner le graphe ${label}`);
+        return;
+    }
 
     const t0 = data[0].t;
     const t1 = data[data.length - 1].t;
