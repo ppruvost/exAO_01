@@ -40,17 +40,17 @@ body {
     border: 1px solid #ccc;
     border-radius: 5px;
     overflow: hidden;
-    background-color: #000; /* Fond noir pour mieux voir la vidéo */
+    background-color: #000;
 }
 
-/* Vidéo */
+/* Vidéo - Adaptation responsive */
 #video {
     width: 100%;
     display: block;
     background-color: #000;
 }
 
-/* Canvas superposé (analyse vidéo) */
+/* Canvas superposé - Adaptation responsive */
 .canvas-overlay,
 .axis-overlay {
     position: absolute;
