@@ -20,6 +20,7 @@ const equationEl = document.getElementById("equation");
 const stopwatchEl = document.getElementById("stopwatch");
 const error1El = document.getElementById("error1-value");
 const error2El = document.getElementById("error2-value");
+const luxValueEl = document.getElementById("lux-value");
 
 /************************************************
  * VARIABLES
@@ -32,7 +33,7 @@ let startTime = 0;
 let originLocked = false;
 let x0 = 0, y0 = 0, z0 = 0;
 let lastX = 0, lastY = 0, lastZ = 0;
-let refSize = null; // Taille de référence (aire du blob) à l'origine
+let refSize = null;
 
 /************************************************
  * WEBCAM (COMPATIBLE MOBILE)
@@ -48,8 +49,11 @@ navigator.mediaDevices.getUserMedia({
  * DIMENSIONS CANVAS
  ************************************************/
 video.onloadedmetadata = () => {
-    canvas.width = axisCanvas.width = video.videoWidth;
-    canvas.height = axisCanvas.height = video.videoHeight;
+    const maxWidth = window.innerWidth * 0.9;
+    const maxHeight = window.innerHeight * 0.5;
+    const ratio = Math.min(maxWidth / video.videoWidth, maxHeight / video.videoHeight);
+    canvas.width = axisCanvas.width = video.videoWidth * ratio;
+    canvas.height = axisCanvas.height = video.videoHeight * ratio;
 };
 
 /************************************************
@@ -69,12 +73,11 @@ function estimateLux(frameData) {
         const r = frameData[i];
         const g = frameData[i + 1];
         const b = frameData[i + 2];
-        const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b; // Formule de luminance
+        const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         sum += luminance;
     }
     const avgLuminance = sum / (frameData.length / 4);
-    // Conversion approximative en lux (à ajuster selon votre calibration)
-    const lux = avgLuminance * 0.1; // Exemple : 10% de la luminance moyenne
+    const lux = avgLuminance * 0.05; // Ajustement pour des valeurs réalistes
     return lux.toFixed(2);
 }
 
@@ -99,7 +102,7 @@ document.getElementById("stop-recording").onclick = () => {
 };
 
 /************************************************
- * TRAITEMENT VIDÉO : x (horizontal), y (profondeur), z (vertical)
+ * TRAITEMENT VIDÉO
  ************************************************/
 function processFrame(tStamp) {
     if (!recording) return;
@@ -111,27 +114,20 @@ function processFrame(tStamp) {
     const d = frame.data;
 
     const lux = estimateLux(d);
-    console.log(`Lux estimés : ${lux}`);
+    luxValueEl.textContent = lux;
 
     let sx = 0, sy = 0, n = 0;
     let minPx = canvas.width, maxPx = 0;
     let minPy = canvas.height, maxPy = 0;
 
-    // Détection des pixels en mouvement
     for (let i = 0; i < d.length; i += 4) {
-        const diff =
-            Math.abs(d[i] - bg[i]) +
-            Math.abs(d[i + 1] - bg[i + 1]) +
-            Math.abs(d[i + 2] - bg[i + 2]);
-
+        const diff = Math.abs(d[i] - bg[i]) + Math.abs(d[i + 1] - bg[i + 1]) + Math.abs(d[i + 2] - bg[i + 2]);
         if (diff > 60) {
             const px = (i / 4) % canvas.width;
             const py = Math.floor((i / 4) / canvas.width);
             sx += px;
             sy += py;
             n++;
-
-            // Mise à jour des coordonnées min/max pour calculer la taille du blob
             if (px < minPx) minPx = px;
             if (px > maxPx) maxPx = px;
             if (py < minPy) minPy = py;
@@ -144,26 +140,21 @@ function processFrame(tStamp) {
         const zc_screen = canvas.height - sy / n;
         const blobWidth = maxPx - minPx;
         const blobHeight = maxPy - minPy;
-        const blobSize = blobWidth * blobHeight; // Aire du blob
+        const blobSize = blobWidth * blobHeight;
 
-        // Initialisation de la référence si ce n'est pas déjà fait
         if (!originLocked) {
             x0 = xc;
             z0 = zc_screen;
             refSize = blobSize;
-            y0 = 0; // Profondeur de référence (par exemple, y=0 au moment de la détection)
+            y0 = 0;
             originLocked = true;
         }
 
-        // Estimation de la profondeur relative (y)
         const sizeRatio = refSize / blobSize;
-        const y = y0 + (1 - sizeRatio) * 100; // Facteur 100 pour amplifier l'effet (à ajuster)
-
-        // Coordonnées x et z (comme avant)
+        const y = y0 + (1 - sizeRatio) * 100;
         const x = xc - x0;
         const z = -(zc_screen - z0);
 
-        // Ajout de la trajectoire avec y
         trajectory.push({ t, x, y, z });
         lastX = x;
         lastY = y;
@@ -176,17 +167,11 @@ function processFrame(tStamp) {
 }
 
 /************************************************
- * POINT ROUGE (t=0 À GAUCHE)
+ * POINT ROUGE
  ************************************************/
 function drawPoint() {
     ctx.beginPath();
-    ctx.arc(
-        canvas.width * 0.1 + lastX,
-        canvas.height / 2 - lastZ,
-        4,
-        0,
-        Math.PI * 2
-    );
+    ctx.arc(canvas.width * 0.1 + lastX, canvas.height / 2 - lastZ, 4, 0, Math.PI * 2);
     ctx.fillStyle = "red";
     ctx.fill();
 }
@@ -198,11 +183,7 @@ function updateStopwatch(t) {
     const min = Math.floor(t / 60);
     const sec = Math.floor(t % 60);
     const cent = Math.floor((t % 1) * 100);
-
-    stopwatchEl.textContent =
-        `${String(min).padStart(2, "0")}:` +
-        `${String(sec).padStart(2, "0")}.` +
-        `${String(cent).padStart(2, "0")}`;
+    stopwatchEl.textContent = `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}.${String(cent).padStart(2, "0")}`;
 }
 
 /************************************************
@@ -220,21 +201,18 @@ document.getElementById("calculate").onclick = () => {
     const vMod = computeVelocityModel(trajectory, SCALE);
     const aData = computeAcceleration(vMod);
 
-    // Débogage : afficher les données de a(t)
-    console.log("Données de a(t) :", aData);
-    console.log("Valeur de l'accélération (vMod.a) :", vMod.a);
+    // Correction des signes pour l'affichage
+    const formatSign = (value) => (value >= 0 ? `+ ${value.toFixed(3)}` : `- ${Math.abs(value).toFixed(3)}`).replace("+ -", "-");
 
-    angleEl.textContent = (Math.atan(zLin.a) * 180 / Math.PI).toFixed(2);
+    angleEl.textContent = Math.abs(Math.atan(zLin.a) * 180 / Math.PI).toFixed(2); // Angle toujours positif
     speedEl.textContent = Math.abs(vMod.b).toFixed(2);
 
-    // Calculer la position finale
     const finalPosition = trajectory[trajectory.length - 1];
     const finalX = finalPosition.x * SCALE;
     const finalY = finalPosition.y * SCALE;
     const finalZ = finalPosition.z * SCALE;
     positionEl.textContent = `(${finalX.toFixed(3)}, ${finalY.toFixed(3)}, ${finalZ.toFixed(3)}) mm`;
 
-    // Exemple de calcul d'erreur
     const theoreticalZ = 0;
     const errorAbs = Math.abs(finalZ - theoreticalZ);
     const errorRel = theoreticalZ !== 0 ? (errorAbs / Math.abs(theoreticalZ)) * 100 : 0;
@@ -242,11 +220,11 @@ document.getElementById("calculate").onclick = () => {
     error2El.textContent = `Erreur relative : ${errorRel.toFixed(2)} %`;
 
     equationEl.textContent =
-`z(t) = ${zLin.b.toFixed(3)} + ${zLin.a.toFixed(3)} t
-x(t) = ${xLin.b.toFixed(3)} + ${xLin.a.toFixed(3)} t
-y(t) = ${yLin.b.toFixed(3)}
-v(t) = ${vMod.a.toFixed(3)} t + ${vMod.b.toFixed(3)}
-a(t) = ${vMod.a.toFixed(3)} mm/s²`;
+`z(t) = ${formatSign(zLin.b)} ${formatSign(zLin.a)} t
+x(t) = ${formatSign(xLin.b)} ${formatSign(xLin.a)} t
+y(t) = ${formatSign(yLin.b)}
+v(t) = ${formatSign(vMod.b)} ${formatSign(vMod.a)} t
+a(t) = ${formatSign(vMod.a)} mm/s²`;
 
     drawGraph("graph-z", zLin.data, "z(t)");
     drawGraph("graph-x", xLin.data, "x(t)");
