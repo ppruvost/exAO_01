@@ -47,12 +47,14 @@ function computeXLinear(trajectory, scale) {
     };
 }
 
-/* y(t) linéaire (constante si non mesurée) */
+/* y(t) linéaire (basée sur les données de profondeur) */
 function computeYLinear(trajectory, scale) {
+    const yData = trajectory.map(p => ({ t: p.t, v: p.y * scale }));
+    const reg = linearRegression(yData);
     return {
-        a: 0,
-        b: 0,
-        data: trajectory.map(p => ({ t: p.t, v: 0 }))
+        a: reg.a,
+        b: reg.b,
+        data: yData.map(p => ({ t: p.t, v: reg.a * p.t + reg.b }))
     };
 }
 
