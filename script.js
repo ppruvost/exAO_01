@@ -30,11 +30,9 @@ let recording = false;
 let startTime = 0;
 
 let originLocked = false;
-let x0 = 0, z0 = 0;
-let lastX = 0, lastZ = 0;
-
-let refSize = null;  // Taille de référence (aire du blob) à l'origine
-let y0 = 0;          // Profondeur de référence (y) à l'origine
+let x0 = 0, y0 = 0, z0 = 0;
+let lastX = 0, lastY = 0, lastZ = 0;
+let refSize = null; // Taille de référence (aire du blob) à l'origine
 
 /************************************************
  * WEBCAM (COMPATIBLE MOBILE)
@@ -63,6 +61,24 @@ document.getElementById("capture-bg").onclick = () => {
 };
 
 /************************************************
+ * DETECTION NOMBRE DE LUX
+ ************************************************/
+function estimateLux(frameData) {
+    let sum = 0;
+    for (let i = 0; i < frameData.length; i += 4) {
+        const r = frameData[i];
+        const g = frameData[i + 1];
+        const b = frameData[i + 2];
+        const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b; // Formule de luminance
+        sum += luminance;
+    }
+    const avgLuminance = sum / (frameData.length / 4);
+    // Conversion approximative en lux (à ajuster selon votre calibration)
+    const lux = avgLuminance * 0.1; // Exemple : 10% de la luminance moyenne
+    return lux.toFixed(2);
+}
+
+/************************************************
  * ENREGISTREMENT
  ************************************************/
 document.getElementById("start-recording").onclick = () => {
@@ -83,7 +99,7 @@ document.getElementById("stop-recording").onclick = () => {
 };
 
 /************************************************
- * TRAITEMENT VIDÉO : x (horizontal) et z (vertical)
+ * TRAITEMENT VIDÉO : x (horizontal), y (profondeur), z (vertical)
  ************************************************/
 function processFrame(tStamp) {
     if (!recording) return;
@@ -93,6 +109,9 @@ function processFrame(tStamp) {
     const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const bg = backgroundFrame.data;
     const d = frame.data;
+
+    const lux = estimateLux(d);
+    console.log(`Lux estimés : ${lux}`);
 
     let sx = 0, sy = 0, n = 0;
     let minPx = canvas.width, maxPx = 0;
@@ -125,22 +144,20 @@ function processFrame(tStamp) {
         const zc_screen = canvas.height - sy / n;
         const blobWidth = maxPx - minPx;
         const blobHeight = maxPy - minPy;
-        const blobSize = blobWidth * blobHeight;  // Aire du blob
+        const blobSize = blobWidth * blobHeight; // Aire du blob
 
         // Initialisation de la référence si ce n'est pas déjà fait
         if (!originLocked) {
             x0 = xc;
             z0 = zc_screen;
             refSize = blobSize;
-            y0 = 0;  // Profondeur de référence (par exemple, y=0 au moment de la détection)
+            y0 = 0; // Profondeur de référence (par exemple, y=0 au moment de la détection)
             originLocked = true;
         }
 
         // Estimation de la profondeur relative (y)
-        // Plus le blob est grand, plus l'objet est proche (y diminue)
-        // Plus le blob est petit, plus l'objet est loin (y augmente)
         const sizeRatio = refSize / blobSize;
-        const y = y0 + (1 - sizeRatio) * 100;  // Facteur 100 pour amplifier l'effet (à ajuster)
+        const y = y0 + (1 - sizeRatio) * 100; // Facteur 100 pour amplifier l'effet (à ajuster)
 
         // Coordonnées x et z (comme avant)
         const x = xc - x0;
@@ -213,14 +230,15 @@ document.getElementById("calculate").onclick = () => {
     // Calculer la position finale
     const finalPosition = trajectory[trajectory.length - 1];
     const finalX = finalPosition.x * SCALE;
+    const finalY = finalPosition.y * SCALE;
     const finalZ = finalPosition.z * SCALE;
-    positionEl.textContent = `(${finalX.toFixed(3)}, 0, ${finalZ.toFixed(3)})`;
+    positionEl.textContent = `(${finalX.toFixed(3)}, ${finalY.toFixed(3)}, ${finalZ.toFixed(3)}) mm`;
 
     // Exemple de calcul d'erreur
     const theoreticalZ = 0;
     const errorAbs = Math.abs(finalZ - theoreticalZ);
     const errorRel = theoreticalZ !== 0 ? (errorAbs / Math.abs(theoreticalZ)) * 100 : 0;
-    error1El.textContent = `Erreur absolue : ${errorAbs.toFixed(3)} m`;
+    error1El.textContent = `Erreur absolue : ${errorAbs.toFixed(3)} mm`;
     error2El.textContent = `Erreur relative : ${errorRel.toFixed(2)} %`;
 
     equationEl.textContent =
@@ -228,7 +246,7 @@ document.getElementById("calculate").onclick = () => {
 x(t) = ${xLin.b.toFixed(3)} + ${xLin.a.toFixed(3)} t
 y(t) = ${yLin.b.toFixed(3)}
 v(t) = ${vMod.a.toFixed(3)} t + ${vMod.b.toFixed(3)}
-a(t) = ${vMod.a.toFixed(3)} m/s²`;
+a(t) = ${vMod.a.toFixed(3)} mm/s²`;
 
     drawGraph("graph-z", zLin.data, "z(t)");
     drawGraph("graph-x", xLin.data, "x(t)");
@@ -236,42 +254,3 @@ a(t) = ${vMod.a.toFixed(3)} m/s²`;
     drawGraph("graph-v", vMod.data, "v(t)");
     drawGraph("graph-a", aData, "a(t)");
 };
-
-/************************************************
- * GRAPHIQUES (TRAITS NOIRS, SANS POINTS)
- ************************************************/
-function drawGraph(id, data, label) {
-    const c = document.getElementById(id);
-    const g = c.getContext("2d");
-    g.clearRect(0, 0, c.width, c.height);
-
-    const p = 30;
-    const w = c.width - 2 * p;
-    const h = c.height - 2 * p;
-
-    g.strokeStyle = "#000";
-    g.lineWidth = 1;
-    g.strokeRect(p, p, w, h);
-
-    if (data.length < 2) {
-        console.warn(`Pas assez de données pour dessiner le graphe ${label}`);
-        return;
-    }
-
-    const t0 = data[0].t;
-    const t1 = data[data.length - 1].t;
-
-    const vMin = Math.min(...data.map(d => d.v));
-    const vMax = Math.max(...data.map(d => d.v)) || 1;
-
-    g.beginPath();
-    data.forEach((pt, i) => {
-        const x = p + (pt.t - t0) / (t1 - t0) * w;
-        const y = p + h - (pt.v - vMin) / (vMax - vMin) * h;
-        i === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
-    });
-    g.stroke();
-
-    g.fillStyle = "#000";
-    g.fillText(label, p + 5, p - 8);
-}
