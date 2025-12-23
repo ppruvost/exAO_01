@@ -77,7 +77,7 @@ function estimateLux(frameData) {
         sum += luminance;
     }
     const avgLuminance = sum / (frameData.length / 4);
-    const lux = avgLuminance * 0.05; // Ajustement pour des valeurs réalistes
+    const lux = avgLuminance * 0.05;
     return lux.toFixed(2);
 }
 
@@ -202,9 +202,16 @@ document.getElementById("calculate").onclick = () => {
     const aResult = computeAcceleration(vMod);
 
     // Correction des signes pour l'affichage
-    const formatSign = (value) => (value >= 0 ? `+ ${value.toFixed(3)}` : `- ${Math.abs(value).toFixed(3)}`).replace("+ -", "-");
+    const formatSign = (value) => {
+        if (value >= 0) return `+${value.toFixed(3)}`;
+        else return `-${Math.abs(value).toFixed(3)}`;
+    };
 
-    angleEl.textContent = Math.abs(Math.atan(zLin.a) * 180 / Math.PI).toFixed(2); // Angle toujours positif
+    // Calcul de l'angle (valeur absolue pour éviter les angles négatifs)
+    const angleRad = Math.atan(zLin.a);
+    const angleDeg = Math.abs(angleRad * 180 / Math.PI).toFixed(2);
+    angleEl.textContent = angleDeg;
+
     speedEl.textContent = Math.abs(vMod.b).toFixed(2);
 
     const finalPosition = trajectory[trajectory.length - 1];
@@ -219,16 +226,19 @@ document.getElementById("calculate").onclick = () => {
     error1El.textContent = `Erreur absolue : ${errorAbs.toFixed(3)} mm`;
     error2El.textContent = `Erreur relative : ${errorRel.toFixed(2)} %`;
 
+    // Affichage des équations
     equationEl.textContent =
 `z(t) = ${formatSign(zLin.b)} ${formatSign(zLin.a)} t
 x(t) = ${formatSign(xLin.b)} ${formatSign(xLin.a)} t
 y(t) = ${formatSign(yLin.b)}
 v(t) = ${formatSign(vMod.b)} ${formatSign(vMod.a)} t
-a(t) = ${formatSign(vMod.a)} mm/s²`;
+a(t) = ${formatSign(aResult.a)} t ${formatSign(aResult.b)}`;
 
+    // Dessin des graphes
     drawGraph("graph-z", zLin.data, "z(t)");
     drawGraph("graph-x", xLin.data, "x(t)");
     drawGraph("graph-y", yLin.data, "y(t)");
     drawGraph("graph-v", vMod.data, "v(t)");
-    drawGraph("graph-a-regression", aResult.regressionData, "a(t)");
+    drawGraph("graph-a", aResult.rawData, "a(t) - Données brutes", false); // Données brutes en rouge
+    drawGraph("graph-a-regression", aResult.regressionData, "a(t) - Régression", true); // Régression en bleu
 };
