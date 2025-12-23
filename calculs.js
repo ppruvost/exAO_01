@@ -99,24 +99,23 @@ function computeVelocityModel(trajectory, scale) {
 }
 
 
-/* a(t) avec données brutes et régression linéaire */
+/* a(t) constant issu du modèle v(t) = a·t */
 function computeAcceleration(vModel) {
-    const aData = [];
-    for (let i = 1; i < vModel.data.length; i++) {
-        const dt = vModel.data[i].t - vModel.data[i - 1].t;
-        const dv = vModel.data[i].v - vModel.data[i - 1].v;
-        const a = dv / dt;
-        aData.push({ t: vModel.data[i].t, v: a });
-    }
 
-    // Régression linéaire sur les données d'accélération
-    const aRegression = linearRegression(aData);
+    // accélération constante issue de la pente de v(t)
+    const aConst = vModel.a;
+
+    // créer une courbe horizontale a(t)
+    const data = vModel.data.map(p => ({
+        t: p.t,
+        v: aConst
+    }));
 
     return {
-        a: aRegression.a, // Pente de la régression
-        b: aRegression.b, // Ordonnée à l'origine
-        rawData: aData, // Données brutes d'accélération
-        regressionData: aData.map(p => ({ t: p.t, v: aRegression.a * p.t + aRegression.b })) // Droite de régression
+        a: aConst,      // accélération constante
+        b: 0,
+        rawData: data, // on affiche directement la constante
+        regressionData: data
     };
 }
 
