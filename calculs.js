@@ -71,7 +71,7 @@ function computeVelocityModel(trajectory, scale) {
     };
 }
 
-/* a(t) avec régression linéaire */
+/* a(t) avec données brutes et régression linéaire */
 function computeAcceleration(vModel) {
     const aData = [];
     for (let i = 1; i < vModel.data.length; i++) {
@@ -81,26 +81,29 @@ function computeAcceleration(vModel) {
         aData.push({ t: vModel.data[i].t, v: a });
     }
 
-    // Appliquer une régression linéaire sur les données d'accélération
+    // Régression linéaire sur les données d'accélération
     const aRegression = linearRegression(aData);
 
     return {
         a: aRegression.a, // Pente de la régression
         b: aRegression.b, // Ordonnée à l'origine
-        data: aData.map(p => ({ t: p.t, v: aRegression.a * p.t + aRegression.b })) // Droite de régression
+        rawData: aData, // Données brutes d'accélération
+        regressionData: aData.map(p => ({ t: p.t, v: aRegression.a * p.t + aRegression.b })) // Droite de régression
     };
 }
 
-/* Fonction pour dessiner les graphes */
-function drawGraph(id, data, label) {
+/* Fonction pour dessiner les graphes avec échelle adaptée */
+function drawGraph(id, data, label, isRegression = false) {
     const c = document.getElementById(id);
+    if (!c) return;
     const g = c.getContext("2d");
     g.clearRect(0, 0, c.width, c.height);
 
-    const p = 30;
+    const p = 30; // Marge
     const w = c.width - 2 * p;
     const h = c.height - 2 * p;
 
+    // Dessiner le cadre du graphe
     g.strokeStyle = "#000";
     g.lineWidth = 1;
     g.strokeRect(p, p, w, h);
@@ -110,20 +113,64 @@ function drawGraph(id, data, label) {
         return;
     }
 
+    // Extraire les valeurs min/max pour l'échelle
     const t0 = data[0].t;
     const t1 = data[data.length - 1].t;
     const vMin = Math.min(...data.map(d => d.v));
     const vMax = Math.max(...data.map(d => d.v));
 
+    // Ajuster les marges pour une meilleure visibilité
+    const vMargin = 0.2 * (vMax - vMin); // Marge de 20%
+    const vMinAdj = vMin - vMargin;
+    const vMaxAdj = vMax + vMargin;
+
+    // Dessiner les axes
     g.beginPath();
+    g.moveTo(p, p + h);
+    g.lineTo(p, p);
+    g.lineTo(p + w, p);
+    g.stroke();
+
+    // Graduations sur l'axe des temps (t)
+    for (let i = 0; i <= 1; i += 0.2) {
+        const x = p + i * w;
+        g.beginPath();
+        g.moveTo(x, p + h);
+        g.lineTo(x, p + h + 5);
+        g.stroke();
+        g.fillText((t0 + i * (t1 - t0)).toFixed(1), x - 10, p + h + 15);
+    }
+
+    // Graduations sur l'axe des valeurs (a(t))
+    for (let i = 0; i <= 1; i += 0.2) {
+        const y = p + h - i * h;
+        g.beginPath();
+        g.moveTo(p, y);
+        g.lineTo(p - 5, y);
+        g.stroke();
+        g.fillText((vMinAdj + i * (vMaxAdj - vMinAdj)).toFixed(2), p - 35, y + 5);
+    }
+
+    // Dessiner la courbe
+    g.beginPath();
+    g.strokeStyle = isRegression ? "#0000FF" : "#FF0000"; // Bleu pour la régression, rouge pour les données brutes
+    g.lineWidth = 2;
     data.forEach((pt, i) => {
         const x = p + (pt.t - t0) / (t1 - t0) * w;
-        const y = p + h - (pt.v - vMin) / (vMax - vMin) * h;
+        const y = p + h - (pt.v - vMinAdj) / (vMaxAdj - vMinAdj) * h;
         if (i === 0) g.moveTo(x, y);
         else g.lineTo(x, y);
     });
     g.stroke();
 
+    // Légende
     g.fillStyle = "#000";
     g.fillText(label, p + 5, p - 8);
+
+    // Afficher la pente si c'est a(t)
+    if (label.includes("a(t)") && isRegression) {
+        const aRegression = linearRegression(data);
+        g.fillStyle = "#0000FF";
+        g.fillText(`a = ${aRegression.a.toFixed(2)} mm/s²`, p + w - 120, p + 20);
+    }
 }
