@@ -199,7 +199,7 @@ document.getElementById("calculate").onclick = () => {
     const xLin = computeXLinear(trajectory, SCALE);
     const yLin = computeYLinear(trajectory, SCALE);
     const vMod = computeVelocityModel(trajectory, SCALE);
-    const aData = computeAcceleration(vMod);
+    const aResult = computeAcceleration(vMod);
 
     // Correction des signes pour l'affichage
     const formatSign = (value) => (value >= 0 ? `+ ${value.toFixed(3)}` : `- ${Math.abs(value).toFixed(3)}`).replace("+ -", "-");
@@ -230,5 +230,5 @@ a(t) = ${formatSign(vMod.a)} mm/s²`;
     drawGraph("graph-x", xLin.data, "x(t)");
     drawGraph("graph-y", yLin.data, "y(t)");
     drawGraph("graph-v", vMod.data, "v(t)");
-    drawGraph("graph-a", aData, "a(t)");
+    drawGraph("graph-a-regression", aResult.regressionData, "a(t)");
 };
