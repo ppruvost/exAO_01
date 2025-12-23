@@ -1,7 +1,7 @@
 /************************************************
  * PARAMÈTRES
  ************************************************/
-const SCALE = 0.002; // m / pixel
+const SCALE = 2; // mm / pixel
 
 /************************************************
  * DOM
@@ -32,6 +32,9 @@ let startTime = 0;
 let originLocked = false;
 let x0 = 0, z0 = 0;
 let lastX = 0, lastZ = 0;
+
+let refSize = null;  // Taille de référence (aire du blob) à l'origine
+let y0 = 0;          // Profondeur de référence (y) à l'origine
 
 /************************************************
  * WEBCAM (COMPATIBLE MOBILE)
@@ -80,7 +83,7 @@ document.getElementById("stop-recording").onclick = () => {
 };
 
 /************************************************
- * TRAITEMENT VIDÉO
+ * TRAITEMENT VIDÉO : x (horizontal) et z (vertical)
  ************************************************/
 function processFrame(tStamp) {
     if (!recording) return;
@@ -92,7 +95,10 @@ function processFrame(tStamp) {
     const d = frame.data;
 
     let sx = 0, sy = 0, n = 0;
+    let minPx = canvas.width, maxPx = 0;
+    let minPy = canvas.height, maxPy = 0;
 
+    // Détection des pixels en mouvement
     for (let i = 0; i < d.length; i += 4) {
         const diff =
             Math.abs(d[i] - bg[i]) +
@@ -105,24 +111,45 @@ function processFrame(tStamp) {
             sx += px;
             sy += py;
             n++;
+
+            // Mise à jour des coordonnées min/max pour calculer la taille du blob
+            if (px < minPx) minPx = px;
+            if (px > maxPx) maxPx = px;
+            if (py < minPy) minPy = py;
+            if (py > maxPy) maxPy = py;
         }
     }
 
     if (n > 40) {
         const xc = sx / n;
         const zc_screen = canvas.height - sy / n;
+        const blobWidth = maxPx - minPx;
+        const blobHeight = maxPy - minPy;
+        const blobSize = blobWidth * blobHeight;  // Aire du blob
 
+        // Initialisation de la référence si ce n'est pas déjà fait
         if (!originLocked) {
             x0 = xc;
             z0 = zc_screen;
+            refSize = blobSize;
+            y0 = 0;  // Profondeur de référence (par exemple, y=0 au moment de la détection)
             originLocked = true;
         }
 
+        // Estimation de la profondeur relative (y)
+        // Plus le blob est grand, plus l'objet est proche (y diminue)
+        // Plus le blob est petit, plus l'objet est loin (y augmente)
+        const sizeRatio = refSize / blobSize;
+        const y = y0 + (1 - sizeRatio) * 100;  // Facteur 100 pour amplifier l'effet (à ajuster)
+
+        // Coordonnées x et z (comme avant)
         const x = xc - x0;
         const z = -(zc_screen - z0);
 
-        trajectory.push({ t, x, z });
+        // Ajout de la trajectoire avec y
+        trajectory.push({ t, x, y, z });
         lastX = x;
+        lastY = y;
         lastZ = z;
     }
 
