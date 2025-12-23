@@ -29,7 +29,6 @@ function linearRegressionThroughOrigin(data) {
         sumTY += p.t * p.v;
     });
 
-    // Sécurité numérique
     if (sumT2 === 0) return { a: 0 };
 
     const a = sumTY / sumT2;
@@ -75,7 +74,7 @@ function computeVelocityModel(trajectory, scale) {
 
     for (let i = 1; i < trajectory.length; i++) {
         const dt = trajectory[i].t - trajectory[i - 1].t;
-        if (dt <= 0) continue; // sécurité
+        if (dt <= 0) continue;
 
         const dx = (trajectory[i].x - trajectory[i - 1].x) * scale;
         const dy = (trajectory[i].y - trajectory[i - 1].y) * scale;
@@ -85,80 +84,63 @@ function computeVelocityModel(trajectory, scale) {
         raw.push({ t: trajectory[i].t, v: speed });
     }
 
-    if (raw.length < 2) {
-        return { a: 0, b: 0, data: [] };
-    }
+    if (raw.length < 2) return { a: 0, b: 0, data: [] };
 
     const reg = linearRegressionThroughOrigin(raw);
 
     return {
-        a: reg.a,     // accélération (pente)
-        b: 0,         // vitesse initiale imposée
+        a: reg.a,
+        b: 0,
         data: raw.map(p => ({ t: p.t, v: reg.a * p.t }))
     };
 }
 
-
 /* a(t) constant issu du modèle v(t) = a·t */
 function computeAcceleration(vModel) {
-
-    // accélération constante issue de la pente de v(t)
     const aConst = vModel.a;
-
-    // créer une courbe horizontale a(t)
-    const data = vModel.data.map(p => ({
-        t: p.t,
-        v: aConst
-    }));
+    const data = vModel.data.map(p => ({ t: p.t, v: aConst }));
 
     return {
-        a: aConst,      // accélération constante
+        a: aConst,
         b: 0,
-        rawData: data, // on affiche directement la constante
+        rawData: data,
         regressionData: data
     };
 }
 
-/* Fonction pour dessiner les graphes avec échelle adaptée */
+/* Fonction pour dessiner les graphes */
 function drawGraph(id, data, label, isRegression = false) {
     const c = document.getElementById(id);
     if (!c) return;
     const g = c.getContext("2d");
     g.clearRect(0, 0, c.width, c.height);
 
-    const p = 30; // Marge
+    const p = 30;
     const w = c.width - 2 * p;
     const h = c.height - 2 * p;
 
-    // Dessiner le cadre du graphe
     g.strokeStyle = "#000";
     g.lineWidth = 1;
     g.strokeRect(p, p, w, h);
 
-    if (data.length < 2) {
-        console.warn(`Pas assez de données pour dessiner le graphe ${label}`);
-        return;
-    }
+    if (data.length < 2) return;
 
-    // Extraire les valeurs min/max pour l'échelle
     const t0 = data[0].t;
     const t1 = data[data.length - 1].t;
     const vMin = Math.min(...data.map(d => d.v));
     const vMax = Math.max(...data.map(d => d.v));
-
-    // Ajuster les marges pour une meilleure visibilité
-    const vMargin = 0.2 * (vMax - vMin); // Marge de 20%
+    const vMargin = 0.2 * (vMax - vMin);
     const vMinAdj = vMin - vMargin;
     const vMaxAdj = vMax + vMargin;
 
-    // Dessiner les axes
+    // Axes
     g.beginPath();
     g.moveTo(p, p + h);
     g.lineTo(p, p);
     g.lineTo(p + w, p);
     g.stroke();
 
-    // Graduations sur l'axe des temps (t)
+    // Graduations t
     for (let i = 0; i <= 1; i += 0.2) {
         const x = p + i * w;
         g.beginPath();
@@ -168,7 +150,7 @@ function drawGraph(id, data, label, isRegression = false) {
         g.fillText((t0 + i * (t1 - t0)).toFixed(1), x - 10, p + h + 15);
     }
 
-    // Graduations sur l'axe des valeurs (a(t))
+    // Graduations v
     for (let i = 0; i <= 1; i += 0.2) {
         const y = p + h - i * h;
         g.beginPath();
@@ -178,9 +160,9 @@ function drawGraph(id, data, label, isRegression = false) {
         g.fillText((vMinAdj + i * (vMaxAdj - vMinAdj)).toFixed(2), p - 35, y + 5);
     }
 
-    // Dessiner la courbe
+    // Courbe
     g.beginPath();
-    g.strokeStyle = isRegression ? "#0000FF" : "#FF0000"; // Bleu pour la régression, rouge pour les données brutes
+    g.strokeStyle = isRegression ? "#0000FF" : "#FF0000";
     g.lineWidth = 2;
     data.forEach((pt, i) => {
         const x = p + (pt.t - t0) / (t1 - t0) * w;
@@ -190,14 +172,32 @@ function drawGraph(id, data, label, isRegression = false) {
     });
     g.stroke();
 
-    // Légende
     g.fillStyle = "#000";
     g.fillText(label, p + 5, p - 8);
 
-    // Afficher la pente si c'est a(t)
     if (label.includes("a(t)") && isRegression) {
         const aRegression = linearRegression(data);
         g.fillStyle = "#0000FF";
         g.fillText(`a = ${aRegression.a.toFixed(2)} mm/s²`, p + w - 120, p + 20);
     }
+}
+
+/************************************************
+ * COMPARAISON AVEC ACCÉLÉRATION THÉORIQUE
+ ************************************************/
+function compareAcceleration(aExp, alphaDeg, g = 9810) {
+    const alphaRad = alphaDeg * Math.PI / 180;
+    const aTheorique = g * Math.sin(alphaRad);
+    const erreurPourcent = ((aExp - aTheorique) / aTheorique) * 100;
+    console.log(`Accélération expérimentale : ${aExp.toFixed(2)} mm/s²`);
+    console.log(`Accélération théorique (g·sinα) : ${aTheorique.toFixed(2)} mm/s²`);
+    console.log(`Erreur relative : ${erreurPourcent.toFixed(2)} %`);
+    return { aTheorique, erreurPourcent };
+}
+
+// Exemple d'utilisation (assurez-vous que "trajectory" est défini)
+if (typeof trajectory !== "undefined") {
+    const vModel = computeVelocityModel(trajectory, 1);
+    const aModel = computeAcceleration(vModel);
+    const comparaison = compareAcceleration(aModel.aConst, 30); // angle 30°
 }
