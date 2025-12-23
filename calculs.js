@@ -77,8 +77,15 @@ function computeVelocityModel(trajectory, scale) {
     };
 }
 
-/* a(t) constante */
+/* a(t) instantanée (dérivée de v(t)) */
 function computeAcceleration(vModel) {
-    // a(t) est constante, donc une droite horizontale
-    return vModel.data.map(p => ({ t: p.t, v: vModel.a }));
+    const aData = [];
+    for (let i = 1; i < vModel.data.length; i++) {
+        const dt = vModel.data[i].t - vModel.data[i - 1].t;
+        const dv = vModel.data[i].v - vModel.data[i - 1].v;
+        const a = dv / dt; // Accélération instantanée
+        aData.push({ t: vModel.data[i].t, v: a });
+    }
+    return aData;
 }
+
