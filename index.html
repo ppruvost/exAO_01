@@ -9,10 +9,12 @@
 
 <body>
   <div class="container">
+    <!-- Affichage de la luminosité -->
     <div class="lux-display">
       Luminosité : <span id="lux-value">0</span> lux
     </div>
 
+    <!-- Conteneur pour la vidéo et les canvas superposés -->
     <div class="video-container">
       <video id="video" autoplay muted playsinline></video>
       <canvas id="canvas" class="canvas-overlay"></canvas>
@@ -21,6 +23,7 @@
       <div class="stopwatch" id="stopwatch">00:00.00</div>
     </div>
 
+    <!-- Boutons de contrôle -->
     <div class="controls">
       <button id="capture-bg">Capturer le fond</button>
       <button id="start-recording">Lancer l'enregistrement</button>
@@ -28,7 +31,7 @@
       <button id="calculate">Calculer</button>
     </div>
 
-    <!-- Résultats -->
+    <!-- Résultats des calculs -->
     <div class="results">
       <p>Angle : <span id="angle-value">—</span> °</p>
       <p>Vitesse : <span id="speed-value">—</span> mm/s</p>
@@ -40,14 +43,19 @@
 
     <!-- Graphiques -->
     <div class="graphs">
+      <!-- Graphes de position -->
       <canvas id="graph-x" width="300" height="200"></canvas>
       <canvas id="graph-y" width="300" height="200"></canvas>
       <canvas id="graph-z" width="300" height="200"></canvas>
+
+      <!-- Graphes de vitesse et accélération -->
       <canvas id="graph-v" width="300" height="200"></canvas>
+      <canvas id="graph-a" width="300" height="200"></canvas> <!-- Ajout du canvas pour les données brutes de a(t) -->
       <canvas id="graph-a-regression" width="300" height="200"></canvas>
     </div>
   </div>
 
+  <!-- Scripts -->
   <script src="calculs.js"></script>
   <script src="script.js"></script>
 </body>
