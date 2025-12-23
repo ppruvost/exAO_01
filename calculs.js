@@ -19,6 +19,23 @@ function linearRegression(data) {
     return { a, b };
 }
 
+/* Régression linéaire forcée à l'origine : y = a t */
+function linearRegressionThroughOrigin(data) {
+    let sumT2 = 0;
+    let sumTY = 0;
+
+    data.forEach(p => {
+        sumT2 += p.t * p.t;
+        sumTY += p.t * p.v;
+    });
+
+    // Sécurité numérique
+    if (sumT2 === 0) return { a: 0 };
+
+    const a = sumTY / sumT2;
+    return { a };
+}
+
 /* z(t) linéaire (plan horizontal ou incliné) */
 function computeZLinear(trajectory, scale) {
     const zData = trajectory.map(p => ({ t: p.t, v: p.z * scale }));
@@ -52,24 +69,35 @@ function computeYLinear(trajectory, scale) {
     };
 }
 
-/* v(t) modélisée (droite lissée) */
+/* v(t) modélisée (droite lissée, v(0)=0) */
 function computeVelocityModel(trajectory, scale) {
     const raw = [];
+
     for (let i = 1; i < trajectory.length; i++) {
         const dt = trajectory[i].t - trajectory[i - 1].t;
+        if (dt <= 0) continue; // sécurité
+
         const dx = (trajectory[i].x - trajectory[i - 1].x) * scale;
+        const dy = (trajectory[i].y - trajectory[i - 1].y) * scale;
         const dz = (trajectory[i].z - trajectory[i - 1].z) * scale;
-        const speed = Math.sqrt(dx * dx + dz * dz) / dt;
+
+        const speed = Math.sqrt(dx * dx + dy * dy + dz * dz) / dt;
         raw.push({ t: trajectory[i].t, v: speed });
     }
 
-    const reg = linearRegression(raw);
+    if (raw.length < 2) {
+        return { a: 0, b: 0, data: [] };
+    }
+
+    const reg = linearRegressionThroughOrigin(raw);
+
     return {
-        a: reg.a,
-        b: reg.b,
-        data: raw.map(p => ({ t: p.t, v: reg.a * p.t + reg.b }))
+        a: reg.a,     // accélération (pente)
+        b: 0,         // vitesse initiale imposée
+        data: raw.map(p => ({ t: p.t, v: reg.a * p.t }))
     };
 }
+
 
 /* a(t) avec données brutes et régression linéaire */
 function computeAcceleration(vModel) {
