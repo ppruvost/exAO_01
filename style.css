@@ -4,7 +4,7 @@
 body {
     font-family: Arial, sans-serif;
     margin: 0;
-    padding: 20px;
+    padding: 10px;
     background-color: #f0f0f0;
 }
 
@@ -15,7 +15,7 @@ body {
     max-width: 900px;
     margin: 0 auto;
     background-color: #ffffff;
-    padding: 20px;
+    padding: 15px;
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
@@ -43,14 +43,14 @@ body {
     background-color: #000;
 }
 
-/* Vidéo - Adaptation responsive */
+/* Vidéo */
 #video {
     width: 100%;
     display: block;
     background-color: #000;
 }
 
-/* Canvas superposé - Adaptation responsive */
+/* Canvas superposé */
 .canvas-overlay,
 .axis-overlay {
     position: absolute;
@@ -96,7 +96,7 @@ body {
     color: #ffffff;
     padding: 5px 10px;
     border-radius: 5px;
-    font-size: 16px;
+    font-size: 14px;
     font-family: monospace;
     z-index: 30;
 }
@@ -180,7 +180,7 @@ button:hover {
 ===================================================== */
 @media (max-width: 768px) {
     body {
-        padding: 5px; /* Réduit encore le padding */
+        padding: 5px;
     }
 
     .container {
@@ -190,31 +190,31 @@ button:hover {
     }
 
     .video-container {
-        max-width: 100%; /* Prend toute la largeur disponible */
+        max-width: 100%;
         margin-bottom: 10px;
     }
 
     #video {
-        max-height: 50vh; /* Limite la hauteur à 50% de l'écran */
+        max-height: 50vh;
     }
 
     .graphs {
-        flex-direction: column; /* Affiche les graphes en colonne */
+        flex-direction: column;
         align-items: center;
     }
 
     .graphs canvas {
-        max-width: 100%; /* Prend toute la largeur */
+        max-width: 100%;
         margin-bottom: 10px;
     }
 
     .controls {
-        flex-direction: column; /* Boutons en colonne */
+        flex-direction: column;
         align-items: center;
     }
 
     button {
-        width: 100%; /* Boutons pleine largeur */
+        width: 100%;
         margin-bottom: 5px;
     }
 }
@@ -224,6 +224,6 @@ button:hover {
 ===================================================== */
 @media (min-width: 769px) and (max-width: 1024px) {
     .graphs canvas {
-        max-width: 48%; /* Deux graphes par ligne */
+        max-width: 48%;
     }
 }
