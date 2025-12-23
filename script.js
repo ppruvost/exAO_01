@@ -2,6 +2,7 @@
  * PARAMÈTRES
  ************************************************/
 const SCALE = 2; // mm / pixel
+const ALPHA = 0.3; // lissage du point rouge
 
 /************************************************
  * DOM
@@ -155,10 +156,10 @@ function processFrame(tStamp) {
         const x = xc - x0;
         const z = -(zc_screen - z0);
 
-        trajectory.push({ t, x, y, z });
-        lastX = x;
-        lastY = y;
-        lastZ = z;
+        trajectory.push({ t, x: lastX, y: lastY, z: lastZ });
+        lastX = ALPHA * x + (1 - ALPHA) * lastX;
+        lastY = ALPHA * y + (1 - ALPHA) * lastY;
+        lastZ = ALPHA * z + (1 - ALPHA) * lastZ;
     }
 
     drawPoint();
