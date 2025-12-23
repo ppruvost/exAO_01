@@ -213,7 +213,7 @@ document.getElementById("calculate").onclick = () => {
     const angleDeg = angleRad * 180 / Math.PI;
     angleEl.textContent = angleDeg.toFixed(2);
 
-    speedEl.textContent = Math.abs(vMod.b).toFixed(2);
+    speedEl.textContent = "v(t) = a·t";
 
     const finalPosition = trajectory[trajectory.length - 1];
     const finalX = finalPosition.x * SCALE;
