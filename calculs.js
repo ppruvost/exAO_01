@@ -24,13 +24,12 @@ function computeZLinear(trajectory, scale) {
     const zData = trajectory.map(p => ({ t: p.t, v: p.z * scale }));
     const reg = linearRegression(zData);
 
-    // Assure que la pente est négative pour une droite décroissante
-    if (reg.a > 0) {
-        reg.a = -Math.abs(reg.a);
-    }
+    // Ne forcez pas la pente à être négative : laissez-la naturelle
+    // Si l'objet monte, reg.a sera positif (droite croissante)
+    // Si l'objet descend, reg.a sera négatif (droite décroissante)
 
     return {
-        a: reg.a,
+        a: reg.a,  // Pente naturelle (positive ou négative)
         b: reg.b,
         data: zData.map(p => ({ t: p.t, v: reg.a * p.t + reg.b }))
     };
