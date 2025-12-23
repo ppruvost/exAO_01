@@ -209,9 +209,9 @@ document.getElementById("calculate").onclick = () => {
     };
 
     // Calcul de l'angle (valeur absolue pour éviter les angles négatifs)
-    const angleRad = Math.atan(zLin.a);
-    const angleDeg = Math.abs(angleRad * 180 / Math.PI).toFixed(2);
-    angleEl.textContent = angleDeg;
+    const angleRad = Math.atan2(Math.abs(zLin.a), Math.abs(xLin.a));
+    const angleDeg = angleRad * 180 / Math.PI;
+    angleEl.textContent = angleDeg.toFixed(2);
 
     speedEl.textContent = Math.abs(vMod.b).toFixed(2);
 
@@ -221,9 +221,19 @@ document.getElementById("calculate").onclick = () => {
     const finalZ = finalPosition.z * SCALE;
     positionEl.textContent = `(${finalX.toFixed(3)}, ${finalY.toFixed(3)}, ${finalZ.toFixed(3)}) mm`;
 
-    const theoreticalZ = 0;
-    const errorAbs = Math.abs(finalZ - theoreticalZ);
-    const errorRel = theoreticalZ !== 0 ? (errorAbs / Math.abs(theoreticalZ)) * 100 : 0;
+    // Temps final
+    const tFinal = trajectory[trajectory.length - 1].t;
+
+    // Valeur théorique issue du modèle z(t) = a t + b
+    const zTheoretical = zLin.a * tFinal + zLin.b;
+
+    // Erreurs
+    const errorAbs = Math.abs(finalZ - zTheoretical);
+
+    // Sécurité numérique si la référence est très petite
+    const reference = Math.max(Math.abs(zTheoretical), 1e-6);
+    const errorRel = (errorAbs / reference) * 100;
+
     error1El.textContent = `Erreur absolue : ${errorAbs.toFixed(3)} mm`;
     error2El.textContent = `Erreur relative : ${errorRel.toFixed(2)} %`;
 
