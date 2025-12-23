@@ -71,7 +71,7 @@ function computeVelocityModel(trajectory, scale) {
     };
 }
 
-/* a(t) instantanée (dérivée de v(t)) */
+/* a(t) avec régression linéaire */
 function computeAcceleration(vModel) {
     const aData = [];
     for (let i = 1; i < vModel.data.length; i++) {
@@ -80,7 +80,15 @@ function computeAcceleration(vModel) {
         const a = dv / dt;
         aData.push({ t: vModel.data[i].t, v: a });
     }
-    return aData;
+
+    // Appliquer une régression linéaire sur les données d'accélération
+    const aRegression = linearRegression(aData);
+
+    return {
+        a: aRegression.a, // Pente de la régression
+        b: aRegression.b, // Ordonnée à l'origine
+        data: aData.map(p => ({ t: p.t, v: aRegression.a * p.t + aRegression.b })) // Droite de régression
+    };
 }
 
 /* Fonction pour dessiner les graphes */
