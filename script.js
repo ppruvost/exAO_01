@@ -202,10 +202,10 @@ document.getElementById("calculate").onclick = () => {
     const vMod = computeVelocityModel(trajectory, SCALE);
     const aResult = computeAcceleration(vMod);
 
-    // Correction des signes pour l'affichage
-    const formatSign = (value) => {
-        if (value >= 0) return `+${value.toFixed(3)}`;
-        else return `-${Math.abs(value).toFixed(3)}`;
+    // Format équation : a.t + b
+    const formatEquation = (a, b) => {
+        const sign = b >= 0 ? "+" : "-";
+        return `${a.toFixed(1)} t ${sign} ${Math.abs(b).toFixed(1)}`;
     };
 
     // Calcul de l'angle (valeur absolue pour éviter les angles négatifs)
@@ -239,11 +239,11 @@ document.getElementById("calculate").onclick = () => {
 
     // Affichage des équations
     equationEl.textContent =
-`z(t) = ${formatSign(zLin.b)} ${formatSign(zLin.a)} t
-x(t) = ${formatSign(xLin.b)} ${formatSign(xLin.a)} t
-y(t) = ${formatSign(yLin.b)}
-v(t) = ${formatSign(vMod.b)} ${formatSign(vMod.a)} t
-a(t) = ${formatSign(aResult.a)} t ${formatSign(aResult.b)}`;
+    `z(t) = ${formatEquation(zLin.a, zLin.b)}
+    x(t) = ${formatEquation(xLin.a, xLin.b)}
+    y(t) = ${formatEquation(yLin.a, yLin.b)}
+    v(t) = ${formatEquation(vMod.a, vMod.b)}
+    a(t) = ${formatEquation(aResult.a, aResult.b)}`;
 
     // Dessin des graphes
     drawGraph("graph-z", zLin.data, "z(t)");
