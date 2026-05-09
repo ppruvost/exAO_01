@@ -35,6 +35,12 @@ function linearRegressionThroughOrigin(data) {
     return { a };
 }
 
+/* Format équation : a.t + b */
+function formatEquation(a, b) {
+    const sign = b >= 0 ? "+" : "-";
+    return `${a.toFixed(1)} t ${sign} ${Math.abs(b).toFixed(1)}`;
+}
+
 /* z(t) linéaire (plan horizontal ou incliné) */
 function computeZLinear(trajectory, scale) {
     const zData = trajectory.map(p => ({ t: p.t, v: p.z * scale }));
